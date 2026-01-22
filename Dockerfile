@@ -29,8 +29,14 @@ COPY . .
 # Install PHP dependencies only
 RUN composer install --optimize-autoloader --no-dev
 
+# Copy custom fonts to FPDF font directory
+RUN cp storage/app/fonts/BOOKOS.* vendor/setasign/fpdf/font/ 2>/dev/null || true
+
 # Create necessary directories
-RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
+RUN mkdir -p storage/framework/{sessions,views,cache,testing} \
+    storage/logs \
+    storage/app/templates \
+    bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
 # Expose port
