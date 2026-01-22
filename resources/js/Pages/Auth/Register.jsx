@@ -1,0 +1,291 @@
+import { Head, useForm, Link } from '@inertiajs/react';
+import InputLabel from '@/Components/InputLabel';
+import TextInput from '@/Components/TextInput';
+import InputError from '@/Components/InputError';
+import PrimaryButton from '@/Components/PrimaryButton';
+
+export default function Register() {
+    const { data, setData, post, processing, errors } = useForm({
+        name: '',
+        department: '',
+        position: '',
+        email: '',
+        password: '',
+        password_confirmation: '',
+    });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('register'));
+    };
+
+    return (
+        <>
+            <Head title="Register" />
+            
+            <div className="min-h-screen flex">
+                {/* Left Side - Gradient Background with Info */}
+                <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 relative overflow-hidden">
+                    {/* Animated Background Elements */}
+                    <div className="absolute inset-0">
+                        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+                        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col justify-center p-12 text-white">
+                        <div className="max-w-md">
+                            {/* Badge */}
+                            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-8 border border-white/30">
+                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-sm font-medium">Join QSU Motor Pool</span>
+                            </div>
+
+                            <h2 className="text-5xl font-bold mb-6 leading-tight">
+                                Get Started with
+                                <span className="block mt-2 bg-gradient-to-r from-yellow-200 to-yellow-400 bg-clip-text text-transparent">
+                                    Motor Pool Services
+                                </span>
+                            </h2>
+                            
+                            <p className="text-xl text-white/90 mb-12 leading-relaxed">
+                                Create your account to access streamlined vehicle request management for QSU.
+                            </p>
+
+                            {/* Registration Process */}
+                            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Registration Process
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 border border-white/30">
+                                            <span className="text-sm font-bold">1</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-medium">Fill Registration Form</p>
+                                            <p className="text-sm text-white/80">Provide your basic information</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 border border-white/30">
+                                            <span className="text-sm font-bold">2</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-medium">Admin Verification</p>
+                                            <p className="text-sm text-white/80">Account reviewed by administrators</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 border border-white/30">
+                                            <span className="text-sm font-bold">3</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-medium">Start Using System</p>
+                                            <p className="text-sm text-white/80">Submit and manage requests</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-8 p-4 bg-yellow-400/20 backdrop-blur-sm rounded-lg border border-yellow-300/30">
+                                <div className="flex items-start gap-3">
+                                    <svg className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p className="text-sm text-white/90">
+                                        Your account will be activated after admin approval. You'll receive a confirmation email once approved.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Side - Form */}
+                <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white relative overflow-y-auto">
+                    {/* Decorative Elements */}
+                    <div className="absolute top-0 left-0 w-64 h-64 bg-orange-100 rounded-full blur-3xl opacity-30 -z-10"></div>
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-red-100 rounded-full blur-3xl opacity-20 -z-10"></div>
+
+                    <div className="w-full max-w-md py-8">
+                        {/* Logo and Back Button */}
+                        <div className="mb-8">
+                            <Link href={route('welcome')} className="inline-flex items-center gap-2 text-gray-600 hover:text-orange-600 transition group">
+                                <svg className="w-5 h-5 group-hover:-translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                Back to Home
+                            </Link>
+                            
+                            <div className="flex items-center gap-3 mt-6">
+                                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900">QSU Motor Pool</h2>
+                                    <p className="text-sm text-gray-500">Request System</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Welcome Text */}
+                        <div className="mb-8">
+                            <h1 className="text-4xl font-bold text-gray-900 mb-2">Create Account</h1>
+                            <p className="text-gray-600">Register to start submitting vehicle requests for QSU.</p>
+                        </div>
+
+                        {/* Registration Form */}
+                        <form onSubmit={submit} className="space-y-5">
+                            <div>
+                                <InputLabel htmlFor="name" className="text-gray-700 font-medium">
+                                    Full Name <span className="text-red-500">*</span>
+                                </InputLabel>
+                                <TextInput
+                                    id="name"
+                                    value={data.name}
+                                    className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    required
+                                    autoFocus
+                                    placeholder="Juan Dela Cruz"
+                                />
+                                <InputError message={errors.name} className="mt-2" />
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-5">
+                                <div>
+                                    <InputLabel htmlFor="department" className="text-gray-700 font-medium">
+                                        Department/Office <span className="text-red-500">*</span>
+                                    </InputLabel>
+                                    <TextInput
+                                        id="department"
+                                        value={data.department}
+                                        className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                        onChange={(e) => setData('department', e.target.value)}
+                                        required
+                                        placeholder="e.g., IT Department"
+                                    />
+                                    <InputError message={errors.department} className="mt-2" />
+                                </div>
+
+                                <div>
+                                    <InputLabel htmlFor="position" className="text-gray-700 font-medium">
+                                        Position/Designation <span className="text-red-500">*</span>
+                                    </InputLabel>
+                                    <TextInput
+                                        id="position"
+                                        value={data.position}
+                                        className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                        onChange={(e) => setData('position', e.target.value)}
+                                        required
+                                        placeholder="e.g., Professor"
+                                    />
+                                    <InputError message={errors.position} className="mt-2" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <InputLabel htmlFor="email" className="text-gray-700 font-medium">
+                                    Email Address <span className="text-red-500">*</span>
+                                </InputLabel>
+                                <TextInput
+                                    id="email"
+                                    type="email"
+                                    value={data.email}
+                                    className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    required
+                                    placeholder="your.email@qsu.edu.ph"
+                                />
+                                <InputError message={errors.email} className="mt-2" />
+                            </div>
+
+                            <div>
+                                <InputLabel htmlFor="password" className="text-gray-700 font-medium">
+                                    Password <span className="text-red-500">*</span>
+                                </InputLabel>
+                                <TextInput
+                                    id="password"
+                                    type="password"
+                                    value={data.password}
+                                    className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    required
+                                    autoComplete="new-password"
+                                    placeholder="Create a strong password"
+                                />
+                                <InputError message={errors.password} className="mt-2" />
+                                <p className="mt-2 text-xs text-gray-500">Minimum 8 characters with letters and numbers</p>
+                            </div>
+
+                            <div>
+                                <InputLabel htmlFor="password_confirmation" className="text-gray-700 font-medium">
+                                    Confirm Password <span className="text-red-500">*</span>
+                                </InputLabel>
+                                <TextInput
+                                    id="password_confirmation"
+                                    type="password"
+                                    value={data.password_confirmation}
+                                    className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+                                    onChange={(e) => setData('password_confirmation', e.target.value)}
+                                    required
+                                    placeholder="Re-enter your password"
+                                />
+                                <InputError message={errors.password_confirmation} className="mt-2" />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
+                            >
+                                {processing ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Creating account...
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center justify-center gap-2">
+                                        Create Account
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                    </span>
+                                )}
+                            </button>
+                        </form>
+
+                        {/* Login Link */}
+                        <div className="mt-6 text-center">
+                            <p className="text-gray-600">
+                                Already have an account?{' '}
+                                <Link 
+                                    href={route('login')} 
+                                    className="text-orange-600 hover:text-orange-700 font-semibold transition"
+                                >
+                                    Log in here
+                                </Link>
+                            </p>
+                        </div>
+
+                        {/* Terms Notice */}
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <p className="text-xs text-gray-600 text-center">
+                                By creating an account, you agree to comply with QSU's policies and regulations for vehicle request services.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}

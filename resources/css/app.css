@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FullCalendar Custom Styles */
+.fc {
+    font-family: inherit;
+}
+
+.fc .fc-button-primary {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+.fc .fc-button-primary:hover {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.fc .fc-button-primary:not(:disabled):active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+    background-color: #1e40af;
+    border-color: #1e40af;
+}
+
+.fc-event {
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.fc-event:hover {
+    opacity: 0.8;
+}
+
+.fc-daygrid-event {
+    white-space: normal !important;
+}
