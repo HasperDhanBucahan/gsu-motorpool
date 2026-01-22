@@ -38,19 +38,3 @@ EXPOSE 8080
 
 # Start server
 CMD php artisan serve --host=0.0.0.0 --port=8080
-```
-
-### **Create `.dockerignore`:**
-```
-/node_modules
-/public/hot
-/public/storage
-/storage/*.key
-/vendor
-.env
-.env.backup
-.phpunit.result.cache
-Homestead.json
-Homestead.yaml
-npm-debug.log
-yarn-error.log
