@@ -4,6 +4,9 @@
 /public/storage
 /storage/pail
 /vendor
+/storage/app/*
+!storage/app/fonts/
+!storage/app/.gitignore
 .env
 .env.backup
 .env.production
