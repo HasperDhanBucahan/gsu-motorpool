@@ -9,9 +9,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libzip-dev \
-    nodejs \
-    npm
+    libzip-dev
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -28,12 +26,8 @@ WORKDIR /app
 # Copy existing application directory
 COPY . .
 
-# Install PHP dependencies
+# Install PHP dependencies only
 RUN composer install --optimize-autoloader --no-dev
-
-# Install Node dependencies and build assets
-RUN npm ci
-RUN npm run build
 
 # Create necessary directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
