@@ -1,9 +1,5 @@
 FROM php:8.2-fpm
 
-RUN php artisan cache:table
-RUN php artisan session:table
-RUN php artisan migrate --force
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
@@ -36,6 +32,11 @@ RUN composer install --optimize-autoloader --no-dev
 # Create necessary directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
+
+# Run migrations and create tables
+RUN php artisan cache:table
+RUN php artisan session:table
+RUN php artisan migrate --force
 
 # Expose port
 EXPOSE 8080
