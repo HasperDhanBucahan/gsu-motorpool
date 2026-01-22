@@ -15,8 +15,10 @@ return new class extends Migration
             $table->id();
             $table->string('plate_number')->unique();
             $table->string('model');
-            $table->string('type'); // e.g. Van, Bus, Car
-            $table->boolean('available')->default(true);
+            $table->string('fuel_type');
+            $table->text('description')->nullable();
+            $table->string('image')->nullable();
+            $table->string('status')->default('available');
             $table->timestamps();
         });
     }

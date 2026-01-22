@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('contact_number');
+            $table->text('description')->nullable();
             $table->boolean('available')->default(true);
-            $table->foreignId('driver_id')->nullable()->constrained('drivers')->nullOnDelete();
             $table->timestamps();
         });
     }

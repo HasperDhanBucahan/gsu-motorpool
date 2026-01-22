@@ -18,7 +18,13 @@ return new class extends Migration
             $table->foreignId('driver_id')->constrained()->onDelete('cascade');
             $table->dateTime('assigned_start');
             $table->dateTime('assigned_end');
+            $table->timestamp('declined_at')->nullable();
+            $table->unsignedBigInteger('declined_by')->nullable();
+            $table->text('decline_reason')->nullable();
             $table->timestamps();
+            
+            // Add foreign key constraint
+            $table->foreign('declined_by')->references('id')->on('users')->nullOnDelete();
         });
     }
 

@@ -14,13 +14,13 @@ return new class extends Migration
         Schema::create('fuel_consumptions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('vehicle_id')->constrained()->onDelete('cascade');
-            $table->integer('year'); // e.g., 2026
-            $table->integer('month'); // 1-12 (January = 1, December = 12)
-            $table->decimal('liters', 10, 2); // Number of liters consumed
+            $table->integer('year');
+            $table->integer('month');
+            $table->decimal('liters', 10, 2);
             $table->timestamps();
-
-            // Ensure one record per vehicle per month per year
-            $table->unique(['vehicle_id', 'year', 'month']);
+            
+            // Add index for querying by year and month
+            $table->index(['vehicle_id', 'year', 'month']);
         });
     }
 
