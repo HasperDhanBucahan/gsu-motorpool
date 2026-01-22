@@ -33,11 +33,6 @@ RUN composer install --optimize-autoloader --no-dev
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
-# Run migrations and create tables
-RUN php artisan cache:table
-RUN php artisan session:table
-RUN php artisan migrate --force
-
 # Expose port
 EXPOSE 8080
 
