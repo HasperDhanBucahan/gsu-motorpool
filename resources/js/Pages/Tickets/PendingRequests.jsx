@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Head, router } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import RequestDetailsModal from "@/Components/RequestDetailsModal";
-import TripTicketPreviewModal from '@/Components/TripTicketPreviewModal.jsx';
+import TripTicketPreviewModal from "@/Components/TripTicketPreviewModal";
 import TripTicketViewModal from "@/Components/TripTicketViewModal";
 import CreateTripTicketModal from "@/Components/CreateTripTicketModal";
 import { format } from "date-fns";
