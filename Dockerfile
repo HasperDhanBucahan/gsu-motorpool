@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libzip-dev
+    libzip-dev \
+    nodejs \
+    npm
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -26,8 +28,12 @@ WORKDIR /app
 # Copy existing application directory
 COPY . .
 
-# Install dependencies
+# Install PHP dependencies
 RUN composer install --optimize-autoloader --no-dev
+
+# Install Node dependencies and build assets
+RUN npm ci
+RUN npm run build
 
 # Create necessary directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache
@@ -37,4 +43,4 @@ RUN chmod -R 775 storage bootstrap/cache
 EXPOSE 8080
 
 # Start server
-CMD php artisan serve --host=0.0.0.0 --port=8080
+CMD php artisan serve --host=0.0.0.0 --port=${PORT:-8080}
