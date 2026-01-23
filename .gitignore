@@ -3,7 +3,7 @@
 /public/hot
 /public/storage
 /storage/pail
-/vendor
+vendor
 /storage/app/*
 !storage/app/fonts/
 !storage/app/.gitignore

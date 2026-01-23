@@ -29,8 +29,9 @@ COPY . .
 # Install PHP dependencies only
 RUN composer install --optimize-autoloader --no-dev
 
-# Copy custom fonts to FPDF font directory
-RUN cp storage/app/fonts/BOOKOS.* vendor/setasign/fpdf/font/ 2>/dev/null || true
+# Copy custom fonts from storage to vendor
+RUN cp storage/app/fonts/BOOKOS*.php vendor/setasign/fpdf/font/
+RUN cp storage/app/fonts/BOOKOS*.z vendor/setasign/fpdf/font/
 
 # Create necessary directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} \
