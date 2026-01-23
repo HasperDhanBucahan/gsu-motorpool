@@ -153,7 +153,7 @@ export default function Register() {
                                     onChange={(e) => setData('name', e.target.value)}
                                     required
                                     autoFocus
-                                    placeholder="Juan Dela Cruz"
+                                    placeholder="e.g., Juan Dela Cruz"
                                 />
                                 <InputError message={errors.name} className="mt-2" />
                             </div>
@@ -169,7 +169,7 @@ export default function Register() {
                                         className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
                                         onChange={(e) => setData('department', e.target.value)}
                                         required
-                                        placeholder="e.g., IT Department"
+                                        placeholder="e.g., BSIT"
                                     />
                                     <InputError message={errors.department} className="mt-2" />
                                 </div>
@@ -184,7 +184,7 @@ export default function Register() {
                                         className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
                                         onChange={(e) => setData('position', e.target.value)}
                                         required
-                                        placeholder="e.g., Professor"
+                                        placeholder="e.g., Staff"
                                     />
                                     <InputError message={errors.position} className="mt-2" />
                                 </div>
@@ -201,7 +201,7 @@ export default function Register() {
                                     className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
                                     onChange={(e) => setData('email', e.target.value)}
                                     required
-                                    placeholder="your.email@qsu.edu.ph"
+                                    placeholder="Enter your email"
                                 />
                                 <InputError message={errors.email} className="mt-2" />
                             </div>
