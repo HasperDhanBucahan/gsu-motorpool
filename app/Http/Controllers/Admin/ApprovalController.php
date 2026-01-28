@@ -153,11 +153,13 @@ class ApprovalController extends Controller
 
             DB::commit();
 
-            // Notify client
-            app(NotificationService::class)->notifyClient($request, 'approved');
+            $notificationService = app(NotificationService::class);
 
-            // Notify ticket admin for trip ticket preparation
-            app(NotificationService::class)->notifyTicketAdmin($request, 'aproved');
+            // This will now send both in-app notification AND email
+            $notificationService->notifyClient($request, 'approved');
+
+            // Notify ticket admin
+            $notificationService->notifyTicketAdmin($request);
 
             return redirect()->route('admin.requests.management')
                 ->with('success', 'Request approved successfully.');
@@ -256,26 +258,121 @@ class ApprovalController extends Controller
     }
 
     /**
+     * Auto-complete requests
+     */
+    private function autoCompleteRequests()
+    {
+        VehicleRequest::where('status', VehicleRequest::STATUS_APPROVED)
+            ->where('end_datetime', '<', now())
+            ->update(['status' => VehicleRequest::STATUS_COMPLETED]);
+    }
+
+    /**
      * Dashboard showing approval statistics
      */
     public function dashboard(): Response
     {
-        $data = [
-            'stats' => [
-                'pending_approvals' => VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)->count(),
-                'approved_requests' => VehicleRequest::where('status', VehicleRequest::STATUS_APPROVED)->count(),
-                'declined_requests' => VehicleRequest::where('status', VehicleRequest::STATUS_DECLINED)->count(),
-                'total_requests' => VehicleRequest::count(),
-            ],
-            'recentActivity' => VehicleRequest::with(['user', 'vehicle', 'driver'])
-                ->whereIn('status', [VehicleRequest::STATUS_APPROVED, VehicleRequest::STATUS_DECLINED])
-                ->orderBy('updated_at', 'desc')
-                ->limit(10)
-                ->get(),
-        ];
+        $this->autoCompleteRequests();
+        // Stats
+        $pendingApprovals = VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)
+            ->count();
 
-        return Inertia::render('Dashboard', [
-            'data' => $data,
+        $approvedToday = VehicleRequest::where('status', VehicleRequest::STATUS_APPROVED)
+            ->whereDate('approved_at', today())
+            ->count();
+
+        $declinedThisWeek = VehicleRequest::where('status', VehicleRequest::STATUS_DECLINED)
+            ->whereBetween('declined_at', [now()->startOfWeek(), now()->endOfWeek()])
+            ->count();
+
+        // Approval rate (this month)
+        $approvedThisMonth = VehicleRequest::where('status', VehicleRequest::STATUS_APPROVED)
+            ->whereMonth('approved_at', now()->month)
+            ->whereYear('approved_at', now()->year)
+            ->count();
+
+        $declinedThisMonth = VehicleRequest::where('status', VehicleRequest::STATUS_DECLINED)
+            ->whereMonth('declined_at', now()->month)
+            ->whereYear('declined_at', now()->year)
+            ->count();
+
+        $totalDecisionsThisMonth = $approvedThisMonth + $declinedThisMonth;
+        $approvalRate = $totalDecisionsThisMonth > 0 
+            ? round(($approvedThisMonth / $totalDecisionsThisMonth) * 100, 1)
+            : 0;
+
+        // Pending queue (10 oldest assigned requests - FIFO)
+        $pendingQueue = VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('updated_at', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'date_of_travel' => $request->date_of_travel->format('M d, Y'),
+                    'time_of_travel' => $request->time_of_travel,
+                    'vehicle' => $request->vehicle ? $request->vehicle->description . ' (' . $request->vehicle->plate_number . ')' : 'N/A',
+                    'driver' => $request->driver ? $request->driver->name : 'N/A',
+                    'assigned_at' => $request->updated_at->format('M d, Y H:i'),
+                    'days_waiting' => now()->diffInDays($request->updated_at),
+                    'travel_date' => $request->date_of_travel,
+                ];
+            });
+
+        // Recent decisions (last 7 approvals/declines)
+        $recentDecisions = VehicleRequest::whereIn('status', [
+                VehicleRequest::STATUS_APPROVED,
+                VehicleRequest::STATUS_DECLINED
+            ])
+            ->with(['user'])
+            ->orderByRaw('COALESCE(approved_at, declined_at) DESC')
+            ->limit(7)
+            ->get()
+            ->map(function ($request) {
+                $timestamp = $request->status === VehicleRequest::STATUS_APPROVED 
+                    ? $request->approved_at 
+                    : $request->declined_at;
+
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'status' => $request->status,
+                    'decision_at' => $timestamp->format('M d, Y H:i'),
+                    'decline_reason' => $request->decline_reason,
+                ];
+            });
+
+        // Urgent requests (travel date within 48 hours and still assigned)
+        $urgentRequests = VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)
+            ->where('start_datetime', '<=', now()->addHours(48))
+            ->where('start_datetime', '>=', now())
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('start_datetime', 'asc')
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'start_datetime' => $request->start_datetime->format('M d, Y H:i'),
+                    'hours_until' => now()->diffInHours($request->start_datetime),
+                ];
+            });
+
+        return Inertia::render('Dashboard/ApprovalAdminDashboard', [
+            'data' => [
+                'pendingApprovals' => $pendingApprovals,
+                'approvedToday' => $approvedToday,
+                'declinedThisWeek' => $declinedThisWeek,
+                'approvalRate' => $approvalRate,
+                'pendingQueue' => $pendingQueue,
+                'recentDecisions' => $recentDecisions,
+                'urgentRequests' => $urgentRequests,
+            ],
         ]);
     }
 

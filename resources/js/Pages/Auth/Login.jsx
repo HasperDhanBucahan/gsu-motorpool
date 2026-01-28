@@ -47,7 +47,7 @@ export default function Login({ status, canResetPassword }) {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-gray-900">QSU Motor Pool</h2>
+                                    <h2 className="text-xl font-bold text-gray-900">GSU Motor Pool</h2>
                                     <p className="text-sm text-gray-500">Request System</p>
                                 </div>
                             </div>
@@ -142,19 +142,6 @@ export default function Login({ status, canResetPassword }) {
                                 )}
                             </button>
                         </form>
-
-                        {/* Sign Up Link */}
-                        <div className="mt-8 text-center">
-                            <p className="text-gray-600">
-                                Don't have an account?{' '}
-                                <Link 
-                                    href={route('register')} 
-                                    className="text-orange-600 hover:text-orange-700 font-semibold transition"
-                                >
-                                    Create an account
-                                </Link>
-                            </p>
-                        </div>
 
                         {/* Help Text */}
                         <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">

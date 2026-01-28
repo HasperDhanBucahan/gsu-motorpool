@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Mail\AccountApprovedMail;
 use App\Mail\AdminAccountCreatedMail;
+use App\Mail\UserAccountCreatedMail; // NEW: For client accounts
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,7 +24,9 @@ class UserManagementController extends Controller
      */
     public function index()
     {
-        $users = User::with('approver')
+        // Get all approved users (no pending state anymore)
+        $users = User::where('status', User::STATUS_APPROVED)
+            ->with('approver')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($user) {
@@ -36,117 +39,18 @@ class UserManagementController extends Controller
                     'role' => $user->role,
                     'role_name' => $user->role_name,
                     'status' => $user->status,
-                    'approved_by' => $user->approver ? $user->approver->name : null,
-                    'approved_at' => $user->approved_at?->format('M d, Y h:i A'),
+                    'created_by' => $user->approver ? $user->approver->name : 'System',
                     'created_at' => $user->created_at->format('M d, Y h:i A'),
                 ];
             });
 
-        $pendingCount = User::where('status', User::STATUS_PENDING)->count();
-
         return Inertia::render('Admin/UserManagement', [
             'users' => $users,
-            'pendingCount' => $pendingCount,
         ]);
     }
 
     /**
-     * Approve a pending user
-     */
-    public function approve($id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $user = User::findOrFail($id);
-
-            if ($user->status !== User::STATUS_PENDING) {
-                return back()->withErrors(['error' => 'Only pending users can be approved.']);
-            }
-
-            $user->update([
-                'status' => User::STATUS_APPROVED,
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-            ]);
-
-            // Send approval email
-            try {
-                Mail::to($user->email)->send(new AccountApprovedMail($user));
-            } catch (\Exception $e) {
-                Log::error('Failed to send approval email', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage()
-                ]);
-            }
-
-            DB::commit();
-
-            Log::info('User approved', [
-                'user_id' => $user->id,
-                'approved_by' => auth()->id()
-            ]);
-
-            return redirect()->back()->with('success', 'User approved successfully. Approval email sent.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('User approval failed', [
-                'user_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
-            return back()->withErrors(['error' => 'Failed to approve user: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Reject and delete a pending user
-     */
-    public function reject($id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $user = User::findOrFail($id);
-
-            if ($user->status !== User::STATUS_PENDING) {
-                return back()->withErrors(['error' => 'Only pending users can be rejected.']);
-            }
-
-            if ($user->role !== User::ROLE_CLIENT) {
-                return back()->withErrors(['error' => 'Only client accounts can be rejected.']);
-            }
-
-            $userName = $user->name;
-            $userEmail = $user->email;
-
-            // Delete the user
-            $user->delete();
-
-            DB::commit();
-
-            Log::info('User rejected and deleted', [
-                'user_name' => $userName,
-                'user_email' => $userEmail,
-                'rejected_by' => auth()->id()
-            ]);
-
-            return redirect()->back()->with('success', 'User registration rejected and removed from system.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('User rejection failed', [
-                'user_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
-            return back()->withErrors(['error' => 'Failed to reject user: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Create a new admin user (assignment_admin or ticket_admin)
+     * Create a new user account (client or admin)
      */
     public function store(Request $request)
     {
@@ -155,7 +59,11 @@ class UserManagementController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'department' => 'required|string|max:255',
             'position' => 'required|string|max:255',
-            'role' => ['required', Rule::in([User::ROLE_ASSIGNMENT_ADMIN, User::ROLE_TICKET_ADMIN])],
+            'role' => ['required', Rule::in([
+                User::ROLE_CLIENT,
+                User::ROLE_ASSIGNMENT_ADMIN,
+                User::ROLE_TICKET_ADMIN
+            ])],
         ]);
 
         try {
@@ -171,16 +79,22 @@ class UserManagementController extends Controller
                 'position' => $validated['position'],
                 'role' => $validated['role'],
                 'password' => Hash::make($temporaryPassword),
-                'status' => User::STATUS_APPROVED, // Auto-approve admin accounts
+                'status' => User::STATUS_APPROVED, // Auto-approve all created accounts
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
             ]);
 
-            // Send email with credentials
+            // Send email with credentials based on role
             try {
-                Mail::to($user->email)->send(new AdminAccountCreatedMail($user, $temporaryPassword));
+                if ($user->role === User::ROLE_CLIENT) {
+                    // Send client account email
+                    Mail::to($user->email)->send(new UserAccountCreatedMail($user, $temporaryPassword));
+                } else {
+                    // Send admin account email
+                    Mail::to($user->email)->send(new AdminAccountCreatedMail($user, $temporaryPassword));
+                }
             } catch (\Exception $e) {
-                Log::error('Failed to send admin account creation email', [
+                Log::error('Failed to send account creation email', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage()
                 ]);
@@ -188,21 +102,22 @@ class UserManagementController extends Controller
 
             DB::commit();
 
-            Log::info('Admin user created', [
+            Log::info('User account created', [
                 'user_id' => $user->id,
                 'role' => $user->role,
                 'created_by' => auth()->id()
             ]);
 
-            return redirect()->back()->with('success', 'Admin account created successfully. Login credentials sent to email.');
+            $roleType = $user->role === User::ROLE_CLIENT ? 'Client' : 'Admin';
+            return redirect()->back()->with('success', "{$roleType} account created successfully. Login credentials sent to email.");
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Admin user creation failed', [
+            Log::error('User account creation failed', [
                 'error' => $e->getMessage()
             ]);
 
-            return back()->withErrors(['error' => 'Failed to create admin account: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Failed to create account: ' . $e->getMessage()]);
         }
     }
 
@@ -282,4 +197,9 @@ class UserManagementController extends Controller
             return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
         }
     }
+
+    /**
+     * REMOVED: approve() method - no longer needed
+     * REMOVED: reject() method - no longer needed
+     */
 }

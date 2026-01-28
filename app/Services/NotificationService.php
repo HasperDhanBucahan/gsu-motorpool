@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 class NotificationService
 {
@@ -69,7 +70,7 @@ class NotificationService
                     'user_id' => $admin->id,
                     'type' => 'request_assigned',
                     'title' => 'Request Ready for Approval',
-                    'message' => "Request #{$request->id} has been assigned a vehicle and driver. Awaiting your approval.",
+                    'message' => "Request from {$request->user->name} has been assigned a vehicle and driver. Awaiting your approval.",
                     'data' => [
                         'request_id' => $request->id,
                         'requester_name' => $request->user->name,
@@ -135,12 +136,15 @@ class NotificationService
 
     /**
      * 3. APPROVAL ADMIN APPROVES/DECLINES
-     * Notify: Client, Ticket Admin (if approved)
+     * Notify: Client (with email including PDF link if approved), Ticket Admin (if approved)
      */
     public function notifyClient(VehicleRequest $request, string $action)
     {
         try {
             if ($action === 'approved') {
+                // Generate PDF download link (signed URL for security)
+                $pdfDownloadUrl = route('requests.download-pdf', ['id' => $request->id]);
+                
                 Notification::create([
                     'user_id' => $request->user_id,
                     'type' => 'request_approved',
@@ -153,13 +157,26 @@ class NotificationService
                         'driver' => $request->driver->name ?? 'N/A',
                         'approved_by' => $request->approver->name ?? 'Admin',
                         'approved_at' => $request->approved_at->format('Y-m-d H:i:s'),
+                        'pdf_url' => $pdfDownloadUrl,
                     ],
                     'action_url' => route('requests.index'),
                     'read' => false,
                 ]);
 
-                // Send approval email (optional)
-                // Mail::to($request->user->email)->send(new RequestApprovedMail($request));
+                // Send approval email with PDF download link
+                try {
+                    Mail::to($request->user->email)->send(new \App\Mail\RequestApprovedMail($request, $pdfDownloadUrl));
+                    
+                    Log::info('Approval email sent to client', [
+                        'request_id' => $request->id,
+                        'email' => $request->user->email
+                    ]);
+                } catch (\Exception $mailException) {
+                    Log::error('Failed to send approval email', [
+                        'request_id' => $request->id,
+                        'error' => $mailException->getMessage()
+                    ]);
+                }
 
             } elseif ($action === 'declined') {
                 Notification::create([
@@ -217,18 +234,18 @@ class NotificationService
                         'destination' => $request->destination,
                         'forwarded_reason' => $request->forwarded_decline_reason,
                     ],
-                    'action_url' => route('requests.pending'), // link to pending requests
+                    'action_url' => route('admin.requests.management'),
                     'read' => false,
                 ]);
             }
 
-            \Log::info('Approval/admin users notified for forwarded decline request', [
+            Log::info('Approval/admin users notified for forwarded decline request', [
                 'request_id' => $request->id,
                 'notified_count' => $approvalAdmins->count(),
             ]);
             
         } catch (\Exception $e) {
-            \Log::error('Failed to notify approval/admin users for forwarded decline', [
+            Log::error('Failed to notify approval/admin users for forwarded decline', [
                 'request_id' => $request->id,
                 'error' => $e->getMessage(),
             ]);
@@ -257,7 +274,7 @@ class NotificationService
                         'vehicle' => $request->vehicle->description ?? 'N/A',
                         'driver' => $request->driver->name ?? 'N/A',
                     ],
-                    'action_url' => route('tickets.trip-tickets'),
+                    'action_url' => route('tickets.pending-requests'),
                     'read' => false,
                 ]);
 
@@ -280,59 +297,41 @@ class NotificationService
 
     /**
      * 5. TICKET ADMIN GENERATES TRIP TICKET
-     * Notify: Client, Driver
+     * Notify: Client, Driver, Assignment Admin
      */
-    public function notifyTicketGenerated(VehicleRequest $request)
+    public function notifyTicketGenerated(VehicleRequest $vehicleRequest)
     {
         try {
-            // Notify Client
-            Notification::create([
-                'user_id' => $request->user_id,
-                'type' => 'ticket_generated',
-                'title' => '🎫 Trip Ticket Generated',
-                'message' => "Your trip ticket #{$request->trip_ticket_number} has been generated and is ready for your trip to {$request->destination}.",
-                'data' => [
-                    'request_id' => $request->id,
-                    'trip_ticket_number' => $request->trip_ticket_number,
-                    'destination' => $request->destination,
-                    'date_of_travel' => $request->date_of_travel->format('Y-m-d'),
-                ],
-                'action_url' => route('requests.approved'),
-                'read' => false,
-            ]);
-
-            // Notify Driver
-            if ($request->driver && $request->driver->user_id) {
+            $assignmentAdmins = User::where('role', 'assignment_admin')->get();
+            
+            foreach ($assignmentAdmins as $admin) {
                 Notification::create([
-                    'user_id' => $request->driver->user_id,
-                    'type' => 'trip_assigned',
-                    'title' => '🚗 New Trip Assignment',
-                    'message' => "You have been assigned to drive {$request->user->name} to {$request->destination} on {$request->date_of_travel->format('M d, Y')}.\nTrip Ticket: #{$request->trip_ticket_number}",
+                    'user_id' => $admin->id,
+                    'type' => 'ticket_generated',
+                    'title' => 'Trip Ticket Generated',
+                    'message' => "Trip ticket #{$vehicleRequest->trip_ticket_number} has been generated for {$vehicleRequest->user->name}'s request to {$vehicleRequest->destination}.",
                     'data' => [
-                        'request_id' => $request->id,
-                        'trip_ticket_number' => $request->trip_ticket_number,
-                        'passenger' => $request->user->name,
-                        'destination' => $request->destination,
-                        'date_of_travel' => $request->date_of_travel->format('Y-m-d'),
-                        'time_of_travel' => $request->time_of_travel,
-                        'vehicle' => $request->vehicle->description ?? 'N/A',
+                        'request_id' => $vehicleRequest->id,
+                        'trip_ticket_number' => $vehicleRequest->trip_ticket_number,
+                        'requester_name' => $vehicleRequest->user->name,
+                        'destination' => $vehicleRequest->destination,
+                        'date_of_travel' => $vehicleRequest->date_of_travel->format('Y-m-d'),
+                        'vehicle' => $vehicleRequest->vehicle->description ?? 'N/A',
+                        'driver' => $vehicleRequest->driver->name ?? 'N/A',
                     ],
-                    'action_url' => '#', // Driver dashboard route
+                    'action_url' => route('assignment.drivers-tickets'),
                     'read' => false,
                 ]);
-
-                // Send email to driver (optional)
-                // Mail::to($request->driver->email)->send(new TripAssignedMail($request));
             }
 
-            Log::info('Ticket generation notifications sent', [
-                'request_id' => $request->id,
-                'trip_ticket_number' => $request->trip_ticket_number
+            Log::info('Assignment admins notified of ticket generation', [
+                'request_id' => $vehicleRequest->id,
+                'notified_count' => $assignmentAdmins->count()
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Failed to notify ticket generation', [
-                'request_id' => $request->id,
+            Log::error('Failed to notify assignment admin of ticket generation', [
+                'request_id' => $vehicleRequest->id,
                 'error' => $e->getMessage()
             ]);
         }
@@ -377,4 +376,3 @@ class NotificationService
         return $deletedCount;
     }
 }
-

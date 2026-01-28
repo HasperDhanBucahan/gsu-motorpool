@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function UserManagement({ users, pendingCount }) {
+export default function UserManagement({ users }) {
     const [activeTab, setActiveTab] = useState('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -14,7 +14,7 @@ export default function UserManagement({ users, pendingCount }) {
         email: '',
         department: '',
         position: '',
-        role: 'assignment_admin',
+        role: 'client',
     });
 
     const { data: editData, setData: setEditData, put: editPut, processing: editProcessing, errors: editErrors } = useForm({
@@ -26,28 +26,10 @@ export default function UserManagement({ users, pendingCount }) {
     });
 
     const filteredUsers = users.filter(user => {
-        if (activeTab === 'pending') return user.status === 'pending';
-        if (activeTab === 'approved') return user.status === 'approved';
         if (activeTab === 'clients') return user.role === 'client';
         if (activeTab === 'admins') return user.role !== 'client';
         return true;
     });
-
-    const handleApprove = (userId) => {
-        if (confirm('Approve this user? They will receive an email notification.')) {
-            router.post(route('admin.users.approve', userId), {}, {
-                preserveScroll: true,
-            });
-        }
-    };
-
-    const handleReject = (userId) => {
-        if (confirm('Reject this user? Their account will be permanently deleted.')) {
-            router.delete(route('admin.users.reject', userId), {
-                preserveScroll: true,
-            });
-        }
-    };
 
     const handleCreate = (e) => {
         e.preventDefault();
@@ -120,7 +102,7 @@ export default function UserManagement({ users, pendingCount }) {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        Create Admin Account
+                        Create User Account
                     </button>
                 </div>
             }
@@ -133,8 +115,6 @@ export default function UserManagement({ users, pendingCount }) {
                     <nav className="flex -mb-px">
                         {[
                             { key: 'all', label: 'All Users', count: users.length },
-                            { key: 'pending', label: 'Pending Approval', count: pendingCount },
-                            { key: 'approved', label: 'Approved', count: users.filter(u => u.status === 'approved').length },
                             { key: 'clients', label: 'Clients', count: users.filter(u => u.role === 'client').length },
                             { key: 'admins', label: 'Admins', count: users.filter(u => u.role !== 'client').length },
                         ].map(tab => (
@@ -205,66 +185,35 @@ export default function UserManagement({ users, pendingCount }) {
                                                 {user.role_name}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {user.status === 'pending' ? (
-                                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                    Pending
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                    Approved
-                                                </span>
-                                            )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {user.created_by}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {user.created_at}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            {user.status === 'pending' ? (
-                                                <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => openEditModal(user)}
+                                                    className="text-blue-600 hover:text-blue-900"
+                                                    title="Edit"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                {user.role !== 'approval_admin' && (
                                                     <button
-                                                        onClick={() => handleApprove(user.id)}
-                                                        className="text-green-600 hover:text-green-900"
-                                                        title="Approve"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleReject(user.id)}
+                                                        onClick={() => openDeleteModal(user)}
                                                         className="text-red-600 hover:text-red-900"
-                                                        title="Reject"
+                                                        title="Delete"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
                                                     </button>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => openEditModal(user)}
-                                                        className="text-blue-600 hover:text-blue-900"
-                                                        title="Edit"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                    </button>
-                                                    {user.role !== 'approval_admin' && (
-                                                        <button
-                                                            onClick={() => openDeleteModal(user)}
-                                                            className="text-red-600 hover:text-red-900"
-                                                            title="Delete"
-                                                        >
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -282,7 +231,7 @@ export default function UserManagement({ users, pendingCount }) {
                         
                         <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
                             <div className="p-6">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Admin Account</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4">Create User Account</h3>
                                 
                                 <form onSubmit={handleCreate}>
                                     <div className="space-y-4">
@@ -342,6 +291,7 @@ export default function UserManagement({ users, pendingCount }) {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500"
                                                 required
                                             >
+                                                <option value="client">Client</option>
                                                 <option value="assignment_admin">Assignment Admin</option>
                                                 <option value="ticket_admin">Ticket Admin</option>
                                             </select>

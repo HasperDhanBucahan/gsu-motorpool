@@ -122,8 +122,6 @@ Route::middleware(['auth', 'role:ticket_admin,assignment_admin'])->prefix('ticke
 
 Route::middleware(['auth', 'role:ticket_admin,approval_admin'])->prefix('ticket')->group(function () {
     Route::get('/users', [App\Http\Controllers\Admin\UserManagementController::class, 'index'])->name('admin.users.index');
-    Route::post('/users/{id}/approve', [App\Http\Controllers\Admin\UserManagementController::class, 'approve'])->name('admin.users.approve');
-    Route::delete('/users/{id}/reject', [UserManagementController::class, 'reject'])->name('admin.users.reject');
     Route::post('/users', [App\Http\Controllers\Admin\UserManagementController::class, 'store'])->name('admin.users.store');
     Route::put('/users/{id}', [App\Http\Controllers\Admin\UserManagementController::class, 'update'])->name('admin.users.update');
     Route::delete('/users/{id}', [App\Http\Controllers\Admin\UserManagementController::class, 'destroy'])->name('admin.users.destroy');

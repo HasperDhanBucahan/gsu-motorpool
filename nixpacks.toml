@@ -14,10 +14,13 @@ cmds = ['composer install --no-dev --optimize-autoloader']
 
 [phases.build]
 cmds = [
-    'php artisan config:cache',
-    'php artisan route:cache',
-    'php artisan view:cache'
+    'cp storage/app/fonts/BOOKOS*.php vendor/setasign/fpdf/font/ || true',
+    'cp storage/app/fonts/BOOKOS*.z vendor/setasign/fpdf/font/ || true',
+    'php artisan config:clear',
+    'php artisan route:clear',
+    'php artisan view:clear'
 ]
 
 [start]
-cmd = 'php artisan serve --host=0.0.0.0 --port=$PORT'
+[start]
+cmd = 'php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && php artisan queue:work --daemon & php artisan serve --host=0.0.0.0 --port=${PORT:-8080}'

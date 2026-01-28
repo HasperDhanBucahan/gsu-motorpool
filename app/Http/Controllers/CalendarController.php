@@ -74,7 +74,7 @@ class CalendarController extends Controller
         // Apply role-based filtering
         switch ($user->role) {
             case 'client':
-                // Clients see their own APPROVED and COMPLETED requests
+                // Clients see their own APPROVED and COMPLETED requests only
                 $query->where('user_id', $user->id)
                       ->whereIn('status', [
                           VehicleRequest::STATUS_APPROVED,
@@ -83,16 +83,18 @@ class CalendarController extends Controller
                 break;
 
             case 'assignment_admin':
-                // Assignment admins see APPROVED and COMPLETED requests
+                // Assignment admins see ASSIGNED, APPROVED and COMPLETED requests
                 $query->whereIn('status', [
+                    VehicleRequest::STATUS_ASSIGNED,
                     VehicleRequest::STATUS_APPROVED,
                     VehicleRequest::STATUS_COMPLETED,
                 ]);
                 break;
 
             case 'approval_admin':
-                // Approval admins see APPROVED, and COMPLETED requests
+                // Approval admins see ASSIGNED, APPROVED, and COMPLETED requests
                 $query->whereIn('status', [
+                    VehicleRequest::STATUS_ASSIGNED,
                     VehicleRequest::STATUS_APPROVED,
                     VehicleRequest::STATUS_COMPLETED,
                 ]);
@@ -142,8 +144,15 @@ class CalendarController extends Controller
 
             case 'assignment_admin':
             case 'approval_admin':
+                // These admins can view assigned, approved and completed requests
+                return in_array($request->status, [
+                    VehicleRequest::STATUS_ASSIGNED,
+                    VehicleRequest::STATUS_APPROVED,
+                    VehicleRequest::STATUS_COMPLETED,
+                ]);
+
             case 'ticket_admin':
-                // Admins can view all approved and completed requests
+                // Ticket admins can view approved and completed requests
                 return in_array($request->status, [
                     VehicleRequest::STATUS_APPROVED,
                     VehicleRequest::STATUS_COMPLETED,

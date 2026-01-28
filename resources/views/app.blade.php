@@ -6,6 +6,7 @@
         
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
+        <link rel="icon" type="image/png" sizes="32x32" href="img/QSU-logo.png">
         <title inertia>{{ config('app.name', 'Motor Pool') }}</title>
 
         <!-- Fonts -->

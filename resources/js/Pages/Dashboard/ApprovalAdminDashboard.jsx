@@ -1,234 +1,279 @@
-import React, { useState } from 'react';
-import { Link, usePage } from '@inertiajs/react';
-import { Pen, CheckCircle } from 'lucide-react';
+
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Head, Link } from '@inertiajs/react';
+import { Clock, CheckCircle, XCircle, TrendingUp, AlertCircle, Calendar } from 'lucide-react';
 import CalendarWidget from '@/Components/CalendarWidget';
-import SignatureModal from '@/Components/SignatureModal';
+import StatusBadge from '@/Components/StatusBadge';
+import EmptyState from '@/Components/EmptyState';
 
-export default function AssignmentAdminDashboard({ data }) {
-    const { auth } = usePage().props;
-    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
-
+export default function ApprovalAdminDashboard({ data }) {
     const formatDateTime = (dateStr) => {
-        return new Date(dateStr).toLocaleString('en-US', {
-            year: 'numeric',
+        return new Date(dateStr).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
-            hour: '2-digit',
+            year: 'numeric',
+            hour: 'numeric',
             minute: '2-digit'
         });
     };
 
-    const getStatusBadge = (status) => {
-        const badges = {
-            active: 'bg-green-100 text-green-800',
-            completed: 'bg-blue-100 text-blue-800',
-            pending: 'bg-yellow-100 text-yellow-800',
-        };
-        return `inline-flex px-2 py-1 text-xs font-semibold rounded-full ${badges[status] || 'bg-gray-100 text-gray-800'}`;
-    };
-
     return (
-        <div className="space-y-6">
-            {/* Signature Section
-            <div className="bg-white shadow rounded-lg p-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div>
-                            <h3 className="text-lg font-medium text-gray-900">Digital Signature</h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                                Your signature will be used on approved documents
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        {auth.user?.signature_path ? (
-                            <div className="flex items-center gap-3">
-                                <div className="border rounded-lg p-2 bg-gray-50">
-                                    <img 
-                                        src={`/storage/${auth.user.signature_path}`} 
-                                        alt="Current Signature" 
-                                        className="h-12 max-w-xs object-contain"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-green-600">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span>Signature Set</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <p className="text-sm text-amber-600">No signature set</p>
-                        )}
-                        
-                        <button
-                            onClick={() => setIsSignatureModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-                        >
-                            <Pen className="w-4 h-4" />
-                            {auth.user?.signature_path ? 'Update Signature' : 'Create Signature'}
-                        </button>
-                    </div>
-                </div>
-            </div> */}
-
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <AuthenticatedLayout>
+            <Head title="Approval Dashboard" />
+            
+            <div className="py-10 bg-gray-50 min-h-[calc(100vh-80px)]">
+                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                    <div className="space-y-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
-                    title="Pending Assignments"
-                    value={data?.stats?.pending_assignments || 0}
-                    icon="clock"
-                    color="yellow"
+                    title="Pending Approvals"
+                    value={data.pendingApprovals}
+                    icon={Clock}
+                    color="amber"
+                    subtitle="Awaiting decision"
                     link={route('admin.requests.management')}
                 />
                 <StatCard
-                    title="Active Assignments"
-                    value={data?.stats?.active_assignments || 0}
-                    icon="activity"
+                    title="Approved Today"
+                    value={data.approvedToday}
+                    icon={CheckCircle}
                     color="green"
+                    subtitle="Completed"
                 />
                 <StatCard
-                    title="Available Vehicles"
-                    value={data?.stats?.available_vehicles || 0}
-                    icon="truck"
+                    title="Declined This Week"
+                    value={data.declinedThisWeek}
+                    icon={XCircle}
+                    color="red"
+                    subtitle="Rejected"
+                />
+                <StatCard
+                    title="Approval Rate"
+                    value={`${data.approvalRate}%`}
+                    icon={TrendingUp}
                     color="blue"
-                />
-                <StatCard
-                    title="Available Drivers"
-                    value={data?.stats?.available_drivers || 0}
-                    icon="users"
-                    color="purple"
+                    subtitle="This month"
                 />
             </div>
 
-            {/* Recent Activity
-            <div className="bg-white shadow rounded-lg">
-                <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        Recent Assignments
-                    </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        Latest vehicle and driver assignments
-                    </p>
-                </div>
-                <div className="px-4 py-5 sm:p-6">
-                    {!data?.recentActivity?.length ? (
-                        <p className="text-gray-500 text-center py-4">No recent activity</p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full table-auto">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Requester</th>
-                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Vehicle</th>
-                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Driver</th>
-                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
-                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Updated</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {data.recentActivity.map((assignment) => (
-                                        <tr key={assignment.id}>
-                                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                                                {assignment.request.user.name}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm text-gray-900">
-                                                {assignment.vehicle ? `${assignment.vehicle.make} ${assignment.vehicle.description}` : 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm text-gray-900">
-                                                {assignment.driver ? assignment.driver.name : 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <span className={getStatusBadge(assignment.status)}>
-                                                    {assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-sm text-gray-500">
-                                                {formatDateTime(assignment.updated_at)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+            {/* Urgent Requests Alert */}
+            {data.urgentRequests && data.urgentRequests.length > 0 && (
+                <div className="bg-gradient-to-r from-red-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
+                            <AlertCircle className="w-7 h-7" />
                         </div>
-                    )}
+                        <div className="flex-1">
+                            <h3 className="text-2xl font-bold mb-1">⚠️ Urgent Approvals Needed</h3>
+                            <p className="text-white/90 text-sm mb-3">
+                                {data.urgentRequests.length} request{data.urgentRequests.length !== 1 ? 's' : ''} with travel dates within 48 hours
+                            </p>
+                            <div className="space-y-2">
+                                {data.urgentRequests.slice(0, 3).map((request) => (
+                                    <div key={request.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+                                        <p className="font-semibold">{request.requester} → {request.destination}</p>
+                                        <p className="text-sm text-white/80 mt-1">
+                                            Departing in {request.hours_until} hours ({request.start_datetime})
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div> */}
+            )}
 
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Pending Approvals Queue - 2 columns */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-amber-50 to-orange-100 px-6 py-4 border-b border-amber-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Pending Approval Queue</h3>
+                                    <p className="text-sm text-gray-600 mt-0.5">
+                                        {data.pendingQueue?.length || 0} request{data.pendingQueue?.length !== 1 ? 's' : ''} awaiting your review
+                                    </p>
+                                </div>
+                                <Link
+                                    href={route('admin.requests.management')}
+                                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+                                >
+                                    Review All
+                                </Link>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            {data.pendingQueue && data.pendingQueue.length > 0 ? (
+                                <div className="space-y-3">
+                                    {data.pendingQueue.map((request, idx) => (
+                                        <Link
+                                            key={request.id}
+                                            href={route('admin.requests.preview-approval', request.id)}
+                                            className="block border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-white to-gray-50"
+                                            style={{
+                                                animation: `slideIn 0.3s ease-out ${idx * 0.05}s both`
+                                            }}
+                                        >
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-semibold text-gray-900 truncate">
+                                                        {request.requester}
+                                                    </h4>
+                                                    <p className="text-sm text-gray-600 mt-0.5 truncate">
+                                                        {request.destination}
+                                                    </p>
+                                                </div>
+                                                {request.days_waiting > 2 && (
+                                                    <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full flex-shrink-0 ml-2">
+                                                        {request.days_waiting}d waiting
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                                <div className="text-xs">
+                                                    <span className="text-gray-500">Vehicle:</span>
+                                                    <p className="font-medium text-gray-700 truncate">{request.vehicle}</p>
+                                                </div>
+                                                <div className="text-xs">
+                                                    <span className="text-gray-500">Driver:</span>
+                                                    <p className="font-medium text-gray-700 truncate">{request.driver}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                                                <span className="flex items-center gap-1">
+                                                    <Calendar className="w-3.5 h-3.5" />
+                                                    {request.date_of_travel}
+                                                </span>
+                                                <span className="text-gray-400">•</span>
+                                                <span>{request.time_of_travel}</span>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    icon={CheckCircle}
+                                    title="All caught up!"
+                                    description="There are no requests pending your approval."
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Recent Decisions - 1 column */}
+                <div>
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-100 px-6 py-4 border-b border-blue-200">
+                            <h3 className="text-lg font-bold text-gray-900">Recent Decisions</h3>
+                            <p className="text-sm text-gray-600 mt-0.5">Your approval history</p>
+                        </div>
+                        <div className="p-6">
+                            {data.recentDecisions && data.recentDecisions.length > 0 ? (
+                                <div className="space-y-3">
+                                    {data.recentDecisions.map((decision, idx) => (
+                                        <div
+                                            key={decision.id}
+                                            className={`border-l-4 rounded-r-lg p-3 ${
+                                                decision.status === 'approved'
+                                                    ? 'border-green-500 bg-green-50'
+                                                    : 'border-red-500 bg-red-50'
+                                            }`}
+                                            style={{
+                                                animation: `slideIn 0.3s ease-out ${idx * 0.1}s both`
+                                            }}
+                                        >
+                                            <div className="flex items-start justify-between mb-1">
+                                                <h4 className="font-semibold text-gray-900 text-sm">
+                                                    {decision.requester}
+                                                </h4>
+                                                <StatusBadge status={decision.status} size="sm" />
+                                            </div>
+                                            <p className="text-xs text-gray-600 truncate mb-1">
+                                                {decision.destination}
+                                            </p>
+                                            {decision.decline_reason && (
+                                                <p className="text-xs text-red-700 bg-red-100 rounded px-2 py-1 mt-2">
+                                                    Reason: {decision.decline_reason}
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-500 mt-2">
+                                                {decision.decision_at}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState
+                                    icon={Clock}
+                                    title="No recent decisions"
+                                    description="Your approval history will appear here."
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Calendar Widget */}
             <CalendarWidget userRole="approval_admin" />
 
-            {/* Signature Modal */}
-            <SignatureModal 
-                isOpen={isSignatureModalOpen}
-                closeModal={() => setIsSignatureModalOpen(false)}
-                currentSignature={auth.user?.signature_path}
-            />
+            <style>{`
+                @keyframes slideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            `}</style>
         </div>
+                </div>
+            </div>
+        </AuthenticatedLayout>
     );
 }
 
-function StatCard({ title, value, icon, color, link }) {
-    const iconColors = {
-        yellow: 'bg-yellow-100 text-yellow-600',
-        green: 'bg-green-100 text-green-600',
-        blue: 'bg-blue-100 text-blue-600',
-        purple: 'bg-purple-100 text-purple-600',
-    };
-
-    const icons = {
-        clock: (
-            <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                clipRule="evenodd"
-            />
-        ),
-        activity: (
-            <path
-                fillRule="evenodd"
-                d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-            />
-        ),
-        truck: (
-            <>
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
-            </>
-        ),
-        users: (
-            <path
-                fillRule="evenodd"
-                d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                clipRule="evenodd"
-            />
-        ),
+// Stat Card Component
+function StatCard({ title, value, icon: Icon, color, subtitle, link }) {
+    const colorClasses = {
+        amber: 'from-amber-500 to-orange-600',
+        green: 'from-green-500 to-emerald-600',
+        red: 'from-red-500 to-rose-600',
+        blue: 'from-blue-500 to-indigo-600',
     };
 
     const content = (
-        <div className="p-5">
-            <div className="flex items-center">
-                <div className="flex-shrink-0">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${iconColors[color]}`}>
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            {icons[icon]}
-                        </svg>
-                    </div>
+        <div className={`bg-gradient-to-br ${colorClasses[color]} p-4`}>
+            <div className="flex items-center justify-between">
+                <div className="flex-1">
+                    <p className="text-white/90 text-sm font-medium mb-1">{title}</p>
+                    <p className="text-white text-3xl font-bold">{value}</p>
+                    <p className="text-white/80 text-xs mt-1">{subtitle}</p>
                 </div>
-                <div className="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-                        <dd className="text-lg font-medium text-gray-900">{value}</dd>
-                    </dl>
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                    <Icon className="w-6 h-6 text-white" />
                 </div>
             </div>
         </div>
     );
 
     return link ? (
-        <Link href={link} className="block bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition">
+        <Link
+            href={link}
+            className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-200 transform hover:scale-105 block"
+        >
             {content}
         </Link>
     ) : (
-        <div className="bg-white overflow-hidden shadow rounded-lg">{content}</div>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            {content}
+        </div>
     );
 }

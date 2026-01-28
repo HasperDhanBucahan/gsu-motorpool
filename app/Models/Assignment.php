@@ -15,7 +15,6 @@ class Assignment extends Model
         'decline_reason',
         'declined_at',
         'declined_by',
-        // Removed 'status' since it's not in your database table
     ];
 
     protected $casts = [

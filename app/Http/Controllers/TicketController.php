@@ -2,30 +2,132 @@
 
 namespace App\Http\Controllers;
 
+use Inertia\Inertia;
+use setasign\Fpdi\Fpdi;
+use App\Services\NotificationService;
 use App\Models\Request;
 use Illuminate\Http\Request as HttpRequest;
-use setasign\Fpdi\Fpdi;
 
 class TicketController extends Controller
 {
+    /**
+     * Auto-complete requests
+     */
+    private function autoCompleteRequests()
+    {
+        Request::where('status', Request::STATUS_APPROVED)
+            ->where('end_datetime', '<', now())
+            ->update(['status' => Request::STATUS_COMPLETED]);
+    }
+
+    protected $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Ticket Admin Dashboard
      */
     public function dashboard()
     {
-        $data = [
-            'totalTickets' => Request::where('status', Request::STATUS_APPROVED)->count(),
-            'generatedTickets' => Request::whereNotNull('ticket_generated_at')->count(),
-            'pendingTickets' => Request::where('status', Request::STATUS_APPROVED)
-                                    ->whereNull('ticket_generated_at')->count(),
-            'recentTickets' => Request::with(['driver','vehicle'])
-                                    ->where('status', Request::STATUS_APPROVED)
-                                    ->latest()
-                                    ->take(5)
-                                    ->get(),
-        ];
+        // Auto-complete requests
+        $this->autoCompleteRequests();
 
-        return inertia('TicketAdminDashboard', ['data' => $data]);
+        // Stats
+        $pendingTickets = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNull('trip_ticket_number')
+            ->count();
+
+        $generatedToday = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNotNull('trip_ticket_number')
+            ->whereDate('ticket_generated_at', today())
+            ->count();
+
+        $sentToday = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNotNull('trip_ticket_number')
+            ->whereDate('ticket_sent_at', today())
+            ->count();
+
+        $totalTickets = Request::whereNotNull('trip_ticket_number')
+            ->count();
+
+        // Pending queue (10 oldest approved requests without tickets - FIFO)
+        $pendingQueue = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNull('trip_ticket_number')
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('approved_at', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'date_of_travel' => $request->date_of_travel->format('M d, Y'),
+                    'time_of_travel' => $request->time_of_travel,
+                    'vehicle' => $request->vehicle ? $request->vehicle->description . ' (' . $request->vehicle->plate_number . ')' : 'N/A',
+                    'driver' => $request->driver ? $request->driver->name : 'N/A',
+                    'approved_at' => $request->approved_at->format('M d, Y H:i'),
+                    'days_waiting' => now()->diffInDays($request->approved_at),
+                    'travel_date' => $request->date_of_travel,
+                    'is_imminent' => $request->start_datetime->lte(now()->addDays(2)),
+                ];
+            });
+
+        // Recent tickets (last 7 generated tickets)
+        $recentTickets = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNotNull('trip_ticket_number')
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('ticket_generated_at', 'desc')
+            ->limit(7)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'trip_ticket_number' => $request->trip_ticket_number,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'vehicle' => $request->vehicle ? $request->vehicle->description : 'N/A',
+                    'driver' => $request->driver ? $request->driver->name : 'N/A',
+                    'generated_at' => $request->ticket_generated_at->format('M d, Y H:i'),
+                    'sent' => $request->ticket_sent_at !== null,
+                ];
+            });
+
+        // Upcoming trips with tickets (next 5 trips)
+        $upcomingTrips = Request::where('status', Request::STATUS_APPROVED)
+            ->whereNotNull('trip_ticket_number')
+            ->where('start_datetime', '>=', now())
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('start_datetime', 'asc')
+            ->limit(5)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'trip_ticket_number' => $request->trip_ticket_number,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'start_datetime' => $request->start_datetime->format('M d, Y H:i'),
+                    'vehicle' => $request->vehicle ? $request->vehicle->description : 'N/A',
+                    'driver' => $request->driver ? $request->driver->name : 'N/A',
+                    'days_until' => now()->diffInDays($request->start_datetime, false),
+                ];
+            });
+
+        return Inertia::render('Dashboard/TicketAdminDashboard', [
+            'data' => [
+                'pendingTickets' => $pendingTickets,
+                'generatedToday' => $generatedToday,
+                'sentToday' => $sentToday,
+                'totalTickets' => $totalTickets,
+                'pendingQueue' => $pendingQueue,
+                'recentTickets' => $recentTickets,
+                'upcomingTrips' => $upcomingTrips,
+            ],
+        ]);
     }
 
     /**
@@ -353,29 +455,9 @@ class TicketController extends Controller
                 'ticket_sent_to' => 'assignment_admin'
             ]);
 
-            // Send notifications to assignment admins
-            $assignmentAdmins = \App\Models\User::where('role', 'assignment_admin')->get();
-            
-            foreach ($assignmentAdmins as $admin) {
-                \DB::table('notifications')->insert([
-                    'user_id' => $admin->id,
-                    'type' => 'trip_ticket_generated',
-                    'title' => 'New Trip Ticket Created',
-                    'message' => "Trip ticket #{$vehicleRequest->trip_ticket_number} has been created by " . auth()->user()->name,
-                    'data' => json_encode([
-                        'request_id' => $vehicleRequest->id,
-                        'trip_ticket_number' => $vehicleRequest->trip_ticket_number,
-                        'requestor' => auth()->user()->name,
-                        'driver' => $vehicleRequest->driver->name ?? 'N/A',
-                        'vehicle' => $vehicleRequest->vehicle->plate_number ?? 'N/A',
-                    ]),
-                    'read' => false,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
             \DB::commit();
+
+            $this->notificationService->notifyTicketGenerated($vehicleRequest);
 
             // Refresh and store for viewing
             $vehicleRequest->refresh();
@@ -386,7 +468,7 @@ class TicketController extends Controller
             
             session(['created_trip_ticket' => $createdTicketData]);
 
-            return back();
+            return back()->with('success', 'Trip ticket created successfully!');;
 
         } catch (\Exception $e) {
             \DB::rollBack();
@@ -425,6 +507,11 @@ class TicketController extends Controller
                 'ticket_generated_at' => now()
             ]);
 
+            \DB::commit();
+
+            $vehicleRequest->load(['driver', 'vehicle', 'user']);
+            $this->notificationService->notifyTicketGenerated($vehicleRequest);
+
             return redirect()->back()->with('success', 'Trip ticket number updated successfully');
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -456,34 +543,18 @@ class TicketController extends Controller
                     ->with('error', 'Cannot send ticket without a trip ticket number');
             }
 
-            // Get assignment admins
-            $assignmentAdmins = \App\Models\User::where('role', 'assignment_admin')->get();
-            
-            foreach ($assignmentAdmins as $admin) {
-                // Create database notification
-                \DB::table('notifications')->insert([
-                    'user_id' => $admin->id,
-                    'type' => 'trip_ticket_generated',
-                    'title' => 'New Trip Ticket Generated',
-                    'message' => "Trip ticket #{$vehicleRequest->trip_ticket_number} has been generated for request #{$vehicleRequest->id}",
-                    'data' => json_encode([
-                        'request_id' => $vehicleRequest->id,
-                        'trip_ticket_number' => $vehicleRequest->trip_ticket_number,
-                        'requestor' => $vehicleRequest->user->name,
-                        'driver' => $vehicleRequest->driver->name ?? 'N/A',
-                        'vehicle' => $vehicleRequest->vehicle->plate_number ?? 'N/A',
-                    ]),
-                    'read' => false,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+            \DB::beginTransaction();
 
             // Mark as sent
             $vehicleRequest->update([
                 'ticket_sent_at' => now(),
                 'ticket_sent_to' => 'assignment_admin'
             ]);
+
+            \DB::commit();
+
+            $vehicleRequest->load(['driver', 'vehicle', 'user']);
+            $this->notificationService->notifyTicketGenerated($vehicleRequest);
 
             return redirect()->back()->with('success', 'Trip ticket sent to Assignment Admin successfully');
 

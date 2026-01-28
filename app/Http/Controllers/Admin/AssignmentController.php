@@ -19,6 +19,175 @@ use Carbon\Carbon;
 class AssignmentController extends Controller
 {
     /**
+     * ASSIGNMENT ADMIN DASHBOARD
+     */
+    public function dashboard()
+    {
+        // Auto-complete requests
+        $this->autoCompleteRequests();
+
+        // Stats
+        $pendingAssignments = VehicleRequest::where('status', VehicleRequest::STATUS_PENDING)
+            ->count();
+
+        $assignedRequests = VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)
+            ->count();
+
+        $totalVehicles = Vehicle::count();
+        $totalDrivers = Driver::count();
+
+        // Available resources today
+        $today = today();
+        $activeRequestIds = VehicleRequest::whereIn('status', [
+                VehicleRequest::STATUS_ASSIGNED,
+                VehicleRequest::STATUS_APPROVED
+            ])
+            ->whereDate('start_datetime', '<=', $today)
+            ->whereDate('end_datetime', '>=', $today)
+            ->pluck('id');
+
+        $busyVehicleIds = VehicleRequest::whereIn('id', $activeRequestIds)
+            ->whereNotNull('vehicle_id')
+            ->pluck('vehicle_id');
+
+        $busyDriverIds = VehicleRequest::whereIn('id', $activeRequestIds)
+            ->whereNotNull('driver_id')
+            ->pluck('driver_id');
+
+        $availableVehicles = Vehicle::whereNotIn('id', $busyVehicleIds)->count();
+        $availableDrivers = Driver::whereNotIn('id', $busyDriverIds)->count();
+
+        // Active today
+        $activeToday = VehicleRequest::whereIn('status', [
+                VehicleRequest::STATUS_ASSIGNED,
+                VehicleRequest::STATUS_APPROVED
+            ])
+            ->whereDate('start_datetime', '<=', $today)
+            ->whereDate('end_datetime', '>=', $today)
+            ->count();
+
+        // Pending queue (10 oldest pending requests - FIFO)
+        $pendingQueue = VehicleRequest::where('status', VehicleRequest::STATUS_PENDING)
+            ->with(['user'])
+            ->orderBy('created_at', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'date_of_travel' => $request->date_of_travel->format('M d, Y'),
+                    'time_of_travel' => $request->time_of_travel,
+                    'days_of_travel' => $request->days_of_travel,
+                    'formatted_duration' => $request->getFormattedDuration(),
+                    'created_at' => $request->created_at->format('M d, Y H:i'),
+                    'days_waiting' => now()->diffInDays($request->created_at),
+                ];
+            });
+
+        // Conflicts detection
+        $conflicts = $this->detectConflicts();
+
+        // Assigned today
+        $assignedToday = VehicleRequest::where('status', VehicleRequest::STATUS_ASSIGNED)
+            ->whereDate('created_at', today())
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'requester' => $request->user->name,
+                    'destination' => $request->destination,
+                    'vehicle' => $request->vehicle ? $request->vehicle->description : 'N/A',
+                    'driver' => $request->driver ? $request->driver->name : 'N/A',
+                    'assigned_at' => $request->updated_at->format('H:i'),
+                ];
+            });
+
+        return Inertia::render('Dashboard/AssignmentAdminDashboard', [
+            'data' => [
+                'pendingAssignments' => $pendingAssignments,
+                'assignedRequests' => $assignedRequests,
+                'totalVehicles' => $totalVehicles,
+                'totalDrivers' => $totalDrivers,
+                'availableVehicles' => $availableVehicles,
+                'availableDrivers' => $availableDrivers,
+                'activeToday' => $activeToday,
+                'pendingQueue' => $pendingQueue,
+                'conflicts' => $conflicts,
+                'assignedToday' => $assignedToday,
+            ],
+        ]);
+    }
+
+    /**
+     * Auto-complete requests
+     */
+    private function autoCompleteRequests()
+    {
+        VehicleRequest::where('status', VehicleRequest::STATUS_APPROVED)
+            ->where('end_datetime', '<', now())
+            ->update(['status' => VehicleRequest::STATUS_COMPLETED]);
+    }
+
+    /**
+     * Detect scheduling conflicts
+     */
+    private function detectConflicts()
+    {
+        $conflicts = [];
+        
+        $futureRequests = VehicleRequest::whereIn('status', [
+                VehicleRequest::STATUS_ASSIGNED,
+                VehicleRequest::STATUS_APPROVED
+            ])
+            ->where('start_datetime', '>=', now())
+            ->with(['user', 'vehicle', 'driver'])
+            ->orderBy('start_datetime', 'asc')
+            ->get();
+
+        foreach ($futureRequests as $request) {
+            $conflictingRequests = VehicleRequest::where('id', '!=', $request->id)
+                ->whereIn('status', [VehicleRequest::STATUS_ASSIGNED, VehicleRequest::STATUS_APPROVED])
+                ->where(function($query) use ($request) {
+                    $query->where('vehicle_id', $request->vehicle_id)
+                          ->orWhere('driver_id', $request->driver_id);
+                })
+                ->where(function($query) use ($request) {
+                    $query->whereBetween('start_datetime', [$request->start_datetime, $request->end_datetime])
+                          ->orWhereBetween('end_datetime', [$request->start_datetime, $request->end_datetime])
+                          ->orWhere(function($q) use ($request) {
+                              $q->where('start_datetime', '<=', $request->start_datetime)
+                                ->where('end_datetime', '>=', $request->end_datetime);
+                          });
+                })
+                ->with(['user', 'vehicle', 'driver'])
+                ->get();
+
+            if ($conflictingRequests->count() > 0) {
+                foreach ($conflictingRequests as $conflicting) {
+                    $conflicts[] = [
+                        'request_id' => $request->id,
+                        'requester' => $request->user->name,
+                        'conflicting_request_id' => $conflicting->id,
+                        'conflicting_requester' => $conflicting->user->name,
+                        'type' => $request->vehicle_id === $conflicting->vehicle_id ? 'vehicle' : 'driver',
+                        'resource' => $request->vehicle_id === $conflicting->vehicle_id 
+                            ? ($request->vehicle ? $request->vehicle->description : 'Unknown Vehicle')
+                            : ($request->driver ? $request->driver->name : 'Unknown Driver'),
+                        'datetime' => $request->start_datetime->format('M d, Y H:i'),
+                    ];
+                }
+            }
+        }
+
+        return collect($conflicts)->take(10);
+    }
+
+    /**
      * Show pending requests that need assignment
      */
     public function index()
