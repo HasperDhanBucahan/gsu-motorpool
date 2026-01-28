@@ -1,3 +1,12 @@
+# Stage 1: Build frontend assets
+FROM node:18 AS node-builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: PHP application
 FROM php:8.2-fpm
 
 # Install system dependencies
@@ -31,6 +40,9 @@ RUN composer install --optimize-autoloader --no-dev --no-scripts
 # Copy application
 COPY . .
 
+# Copy built assets from node-builder stage
+COPY --from=node-builder /app/public/build /app/public/build
+
 # Copy custom fonts
 RUN cp storage/app/fonts/BOOKOS*.php vendor/setasign/fpdf/font/ 2>/dev/null || true
 RUN cp storage/app/fonts/BOOKOS*.z vendor/setasign/fpdf/font/ 2>/dev/null || true
@@ -43,22 +55,14 @@ RUN mkdir -p storage/framework/{sessions,views,cache,testing} \
     storage/logs \
     storage/app/templates \
     bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
-# Clear caches
-RUN php artisan config:clear || true
-RUN php artisan route:clear || true
-RUN php artisan view:clear || true
-
-# Expose port (Railway assigns this dynamically)
+# Expose port
 EXPOSE 8080
 
 # Start command
 CMD php artisan config:cache && \
     php artisan route:cache && \
     php artisan view:cache && \
-    php artisan migrate && \
-    php artisan migrate:fresh && \
-    php artisan queue:work --daemon --tries=3 & \
+    php artisan migrate --force && \
     php artisan serve --host=0.0.0.0 --port=${PORT:-8080}
