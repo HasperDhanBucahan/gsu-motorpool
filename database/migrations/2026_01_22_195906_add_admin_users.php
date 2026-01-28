@@ -42,6 +42,16 @@ return new class extends Migration
             'role' => 'ticket_admin',
             'status' => 'approved',
         ]);
+
+        User::create([
+            'name' => 'Client User',
+            'department' => 'BSIT',
+            'position' => 'Program Chair',
+            'email' => 'hasperthegreat04@gmail.com',
+            'password' => bcrypt('password'),
+            'role' => 'client',
+            'status' => 'approved',
+        ]);
     }
 
     /**
@@ -53,6 +63,7 @@ return new class extends Migration
             'approval_admin@sample.com',
             'assignment_admin@sample.com',
             'ticket_admin@sample.com',
+            'hasperthegreat04@gmail.com'
         ])->delete();
     }
 };
