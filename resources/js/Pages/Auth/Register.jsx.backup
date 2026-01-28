@@ -14,11 +14,6 @@ export default function Register() {
         password_confirmation: '',
     });
 
-    const submit = (e) => {
-        e.preventDefault();
-        post(route('register'));
-    };
-
     return (
         <>
             <Head title="Register" />
