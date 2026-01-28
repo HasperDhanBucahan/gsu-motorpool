@@ -1,1 +1,0 @@
-import{j as n}from"./app-CM_53ag-.js";function e({message:r,className:t="",...o}){return r?n.jsx("p",{className:`text-sm text-red-600 mt-1 ${t}`,...o,children:r}):null}function u({className:r="",...t}){return n.jsx("input",{className:`border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm ${r}`,...t})}export{e as I,u as T};
