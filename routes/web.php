@@ -164,48 +164,52 @@ Route::middleware(['auth'])->get('/debug-role', function () {
     ]);
 });
 
-// Add this to routes/web.php - TEMPORARY FOR TESTING
-
-Route::get('/test-email-send', function () {
+// TEMPORARY EMAIL TEST - NO AUTH REQUIRED
+Route::get('/test-email-send-public-temp', function () {
     try {
         $testEmail = 'hasperthegreat04@gmail.com'; // Your email
         
-        // Test 1: Simple mail test
-        \Illuminate\Support\Facades\Mail::raw('This is a test email from Railway', function ($message) use ($testEmail) {
-            $message->to($testEmail)
-                    ->subject('Test Email from Motor Pool System');
-        });
+        \Illuminate\Support\Facades\Log::info('Starting email test');
         
-        $result = [
-            'status' => 'success',
-            'message' => 'Test email sent successfully!',
-            'config' => [
-                'mailer' => config('mail.default'),
-                'host' => config('mail.mailers.smtp.host'),
-                'port' => config('mail.mailers.smtp.port'),
-                'encryption' => config('mail.mailers.smtp.encryption'),
-                'username' => config('mail.mailers.smtp.username'),
-                'from_address' => config('mail.from.address'),
-                'from_name' => config('mail.from.name'),
-            ],
-            'sent_to' => $testEmail,
+        // Test 1: Check mail configuration
+        $config = [
+            'mailer' => config('mail.default'),
+            'host' => config('mail.mailers.smtp.host'),
+            'port' => config('mail.mailers.smtp.port'),
+            'encryption' => config('mail.mailers.smtp.encryption'),
+            'username' => config('mail.mailers.smtp.username'),
+            'password_set' => !empty(config('mail.mailers.smtp.password')),
+            'from_address' => config('mail.from.address'),
+            'from_name' => config('mail.from.name'),
         ];
         
-        \Illuminate\Support\Facades\Log::info('Test email sent', $result);
+        \Illuminate\Support\Facades\Log::info('Mail configuration', $config);
         
-        return response()->json($result);
+        // Test 2: Send email
+        \Illuminate\Support\Facades\Mail::raw('Test email from Railway Motor Pool System - ' . now(), function ($message) use ($testEmail) {
+            $message->to($testEmail)
+                    ->subject('Test Email - Motor Pool System');
+        });
+        
+        \Illuminate\Support\Facades\Log::info('Email sent successfully');
+        
+        return response()->json([
+            'status' => 'SUCCESS',
+            'message' => 'Test email sent! Check your inbox: ' . $testEmail,
+            'config' => $config,
+            'timestamp' => now()->toDateTimeString(),
+        ]);
         
     } catch (\Exception $e) {
         $error = [
-            'status' => 'error',
+            'status' => 'ERROR',
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
-            'trace' => $e->getTraceAsString(),
         ];
         
-        \Illuminate\Support\Facades\Log::error('Test email failed', $error);
+        \Illuminate\Support\Facades\Log::error('Email test failed', $error);
         
         return response()->json($error, 500);
     }
-})->middleware('auth');
+});
