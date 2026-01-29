@@ -213,3 +213,42 @@ Route::get('/test-email-send-public-temp', function () {
         return response()->json($error, 500);
     }
 });
+
+Route::get('/test-user-email-direct', function () {
+    try {
+        $testUser = new \App\Models\User([
+            'name' => 'Test User',
+            'email' => 'hasperthegreat04@gmail.com',
+            'department' => 'IT Department',
+            'position' => 'Developer',
+            'role' => \App\Models\User::ROLE_CLIENT,
+        ]);
+        
+        $testPassword = 'TestPassword123';
+        
+        \Illuminate\Support\Facades\Log::info('Testing UserAccountCreatedMail');
+        
+        \Illuminate\Support\Facades\Mail::to('hasperthegreat04@gmail.com')
+            ->send(new \App\Mail\UserAccountCreatedMail($testUser, $testPassword));
+        
+        \Illuminate\Support\Facades\Log::info('UserAccountCreatedMail sent successfully');
+        
+        return response()->json([
+            'status' => 'SUCCESS',
+            'message' => 'UserAccountCreatedMail sent! Check your inbox.',
+        ]);
+        
+    } catch (\Exception $e) {
+        \Illuminate\Support\Facades\Log::error('UserAccountCreatedMail test failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        
+        return response()->json([
+            'status' => 'ERROR',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ], 500);
+    }
+});
