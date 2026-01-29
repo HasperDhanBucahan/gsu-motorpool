@@ -157,125 +157,215 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/calendar/requests/{id}', [CalendarController::class, 'show'])->name('calendar.requests.show');
 });
 
-Route::get('/diagnose-email-config', function () {
-    $diagnostics = [
-        'timestamp' => now()->toDateTimeString(),
-        'environment' => config('app.env'),
-        
-        // Mail Configuration
-        'mail_config' => [
-            'default_mailer' => config('mail.default'),
-            'resend_transport_configured' => config('mail.mailers.resend.transport') ?? 'NOT SET',
-            'from_address' => config('mail.from.address'),
-            'from_name' => config('mail.from.name'),
-        ],
-        
-        // Services Configuration
-        'services_config' => [
-            'resend_key_configured' => !empty(config('services.resend.key')),
-            'resend_key_preview' => config('services.resend.key') 
-                ? substr(config('services.resend.key'), 0, 10) . '...' . substr(config('services.resend.key'), -4)
-                : 'NOT SET',
-        ],
-        
-        // Environment Variables
-        'env_vars' => [
-            'MAIL_MAILER' => env('MAIL_MAILER'),
-            'RESEND_KEY_set' => !empty(env('RESEND_KEY')),
-            'RESEND_KEY_preview' => env('RESEND_KEY') 
-                ? substr(env('RESEND_KEY'), 0, 10) . '...' . substr(env('RESEND_KEY'), -4)
-                : 'NOT SET',
-            'MAIL_FROM_ADDRESS' => env('MAIL_FROM_ADDRESS'),
-            'MAIL_FROM_NAME' => env('MAIL_FROM_NAME'),
-        ],
-        
-        // Package Check
-        'packages' => [
-            'resend_package_installed' => class_exists(\Resend\Laravel\ResendServiceProvider::class),
-            'resend_version' => 'Check composer.json',
-        ],
-        
-        // Config Files Exist
-        'config_files' => [
-            'mail_config_exists' => file_exists(config_path('mail.php')),
-            'services_config_exists' => file_exists(config_path('services.php')),
-        ],
-        
-        // Mail Mailable Check
-        'mail_classes' => [
-            'UserAccountCreatedMail_exists' => class_exists(\App\Mail\UserAccountCreatedMail::class),
-            'Mail_facade_works' => class_exists(\Illuminate\Support\Facades\Mail::class),
-        ],
-    ];
-    
-    // Determine issues
-    $issues = [];
-    $recommendations = [];
-    
-    if (config('mail.default') !== 'resend') {
-        $issues[] = "MAIL_MAILER is not set to 'resend' (current: " . config('mail.default') . ")";
-        $recommendations[] = "Set MAIL_MAILER=resend in Railway environment variables";
-    }
-    
-    if (empty(config('services.resend.key'))) {
-        $issues[] = "Resend API key not configured in services.php";
-        $recommendations[] = "Add 'resend' => ['key' => env('RESEND_KEY')] to config/services.php";
-    }
-    
-    if (empty(env('RESEND_KEY'))) {
-        $issues[] = "RESEND_KEY environment variable not set";
-        $recommendations[] = "Set RESEND_KEY in Railway environment variables";
-    }
-    
-    $resendMailer = config('mail.mailers.resend');
-    if (empty($resendMailer)) {
-        $issues[] = "Resend mailer not configured in mail.php";
-        $recommendations[] = "Add 'resend' => ['transport' => 'resend'] to config/mail.php mailers array";
-    }
-    
-    $diagnostics['issues'] = $issues;
-    $diagnostics['recommendations'] = $recommendations;
-    $diagnostics['status'] = empty($issues) ? 'READY' : 'NEEDS_CONFIGURATION';
-    
-    return response()->json($diagnostics, 200, [], JSON_PRETTY_PRINT);
-});
-
-// BONUS: Test actual email sending
-Route::get('/diagnose-email-send', function () {
-    $testEmail = 'hasperthegreat04@gmail.com';
-    
+// Test 1: Check if email template renders without errors
+Route::get('/debug-email-template', function () {
     try {
-        \Log::info('Email Send Test Started', [
-            'mailer' => config('mail.default'),
-            'to' => $testEmail,
+        $testUser = new \App\Models\User([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'department' => 'IT Department',
+            'position' => 'Developer',
+            'role' => \App\Models\User::ROLE_CLIENT,
         ]);
         
-        \Mail::raw('Diagnostic test email sent at ' . now()->format('Y-m-d H:i:s') . ' from Railway deployment.', function ($message) use ($testEmail) {
-            $message->to($testEmail)
-                    ->subject('Email Diagnostic Test - QSU Motorpool');
-        });
+        $testPassword = 'TestPassword123';
         
-        \Log::info('Email Send Test - SUCCESS');
+        // Try to render the email template
+        $mailable = new \App\Mail\UserAccountCreatedMail($testUser, $testPassword);
+        $rendered = $mailable->render();
         
-        return response()->json([
-            'status' => 'SUCCESS',
-            'message' => 'Email sent successfully to ' . $testEmail,
-            'mailer_used' => config('mail.default'),
-            'check_logs' => 'Review Railway logs for detailed information',
-        ]);
+        return response($rendered)->header('Content-Type', 'text/html');
         
     } catch (\Exception $e) {
-        \Log::error('Email Send Test - FAILED', [
+        return response()->json([
+            'status' => 'TEMPLATE_ERROR',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+        ], 500);
+    }
+});
+
+// Test 2: Send email using the exact same code as UserManagementController
+Route::get('/debug-send-user-email', function () {
+    try {
+        $temporaryPassword = \Illuminate\Support\Str::random(12);
+        
+        $testUser = new \App\Models\User([
+            'id' => 999999,
+            'name' => 'Debug Test User',
+            'email' => 'hasperthegreat04@gmail.com',
+            'department' => 'Test Department',
+            'position' => 'Test Position',
+            'role' => \App\Models\User::ROLE_CLIENT,
+        ]);
+
+        \Log::info('=== DEBUG: Starting email send test ===', [
+            'email' => $testUser->email,
+            'mailer' => config('mail.default'),
+        ]);
+
+        \Illuminate\Support\Facades\Mail::to($testUser->email)
+            ->send(new \App\Mail\UserAccountCreatedMail($testUser, $temporaryPassword));
+
+        \Log::info('=== DEBUG: Email sent successfully ===');
+
+        return response()->json([
+            'status' => 'SUCCESS',
+            'message' => 'Email sent successfully to ' . $testUser->email,
+            'password' => $temporaryPassword,
+            'check_inbox'=> 'Check hasperthegreat04@gmail.com',
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('=== DEBUG: Email send failed ===', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
         ]);
-        
+
         return response()->json([
             'status' => 'ERROR',
             'message' => $e->getMessage(),
-            'error_type' => get_class($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
         ], 500);
     }
+});
+
+// Test 3: Actually create a user and send email (full integration test)
+Route::get('/debug-full-user-creation', function () {
+    try {
+        $temporaryPassword = \Illuminate\Support\Str::random(12);
+        
+        \Log::info('=== DEBUG FULL: Creating user ===');
+        
+        $user = \App\Models\User::create([
+            'name' => 'Full Test User ' . now()->format('His'),
+            'email' => 'hasperthegreat04@gmail.com',
+            'department' => 'Test Department',
+            'position' => 'Test Position',
+            'role' => 'client',
+            'password' => \Illuminate\Support\Facades\Hash::make($temporaryPassword),
+            'status' => 'approved',
+            'approved_by' => 1,
+            'approved_at' => now(),
+            'email_verified_at' => now(),
+        ]);
+
+        \Log::info('=== DEBUG FULL: User created ===', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        \Log::info('=== DEBUG FULL: Sending email ===');
+
+        \Illuminate\Support\Facades\Mail::to($user->email)
+            ->send(new \App\Mail\UserAccountCreatedMail($user, $temporaryPassword));
+
+        \Log::info('=== DEBUG FULL: Email sent successfully ===');
+
+        // Clean up - delete test user
+        $user->delete();
+        \Log::info('=== DEBUG FULL: Test user deleted ===');
+
+        return response()->json([
+            'status' => 'SUCCESS',
+            'message' => 'Full test completed successfully! Email sent.',
+            'password_used' => $temporaryPassword,
+            'note' => 'Test user was created and then deleted',
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('=== DEBUG FULL: Failed ===', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'status' => 'ERROR',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString()),
+        ], 500);
+    }
+});
+
+// Test 4: Check if route('login') works in production
+Route::get('/debug-check-routes', function () {
+    try {
+        $loginRoute = route('login');
+        $appUrl = config('app.url');
+        
+        return response()->json([
+            'status' => 'SUCCESS',
+            'routes_work'=> true,
+            'login_route' => $loginRoute,
+            'app_url' => $appUrl,
+            'all_routes' => [
+                'login' => route('login'),
+                'dashboard' => route('dashboard'),
+            ],
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'ERROR',
+            'message' => 'Route generation failed: ' . $e->getMessage(),
+        ], 500);
+    }
+});
+
+// Test 5: Compare working vs non-working email sends
+Route::get('/debug-compare-emails', function () {
+    $results = [];
+    
+    // Test 1: Raw email (we know this works)
+    try {
+        \Illuminate\Support\Facades\Mail::raw('Test 1: Raw email', function ($message) {
+            $message->to('hasperthegreat04@gmail.com')
+                    ->subject('Debug Test 1: Raw');
+        });
+        $results['test1_raw'] = 'SUCCESS';
+    } catch (\Exception $e) {
+        $results['test1_raw'] = 'FAILED: ' . $e->getMessage();
+    }
+    
+    // Test 2: Mailable with non-persisted user
+    try {
+        $tempUser = new \App\Models\User([
+            'name' => 'Temp User',
+            'email' => 'hasperthegreat04@gmail.com',
+            'department' => 'Test',
+            'position' => 'Test',
+            'role' => 'client',
+        ]);
+        
+        \Illuminate\Support\Facades\Mail::to('hasperthegreat04@gmail.com')
+            ->send(new \App\Mail\UserAccountCreatedMail($tempUser, 'TestPass123'));
+        
+        $results['test2_mailable_temp_user'] = 'SUCCESS';
+    } catch (\Exception $e) {
+        $results['test2_mailable_temp_user'] = 'FAILED: ' . $e->getMessage();
+    }
+    
+    // Test 3: Mailable with real persisted user
+    try {
+        $realUser = \App\Models\User::first();
+        if ($realUser) {
+            \Illuminate\Support\Facades\Mail::to('hasperthegreat04@gmail.com')
+                ->send(new \App\Mail\UserAccountCreatedMail($realUser, 'TestPass123'));
+            $results['test3_mailable_real_user'] = 'SUCCESS';
+        } else {
+            $results['test3_mailable_real_user'] = 'SKIPPED: No users in database';
+        }
+    } catch (\Exception $e) {
+        $results['test3_mailable_real_user'] = 'FAILED: ' . $e->getMessage();
+    }
+    
+    return response()->json([
+        'status' => 'COMPARISON_COMPLETE',
+        'results' => $results,
+        'analysis' => 'Check which test failed to identify the issue',
+    ]);
 });
