@@ -163,3 +163,49 @@ Route::middleware(['auth'])->get('/debug-role', function () {
         'role' => auth()->user()->role,
     ]);
 });
+
+// Add this to routes/web.php - TEMPORARY FOR TESTING
+
+Route::get('/test-email-send', function () {
+    try {
+        $testEmail = 'hasperthegreat04@gmail.com'; // Your email
+        
+        // Test 1: Simple mail test
+        \Illuminate\Support\Facades\Mail::raw('This is a test email from Railway', function ($message) use ($testEmail) {
+            $message->to($testEmail)
+                    ->subject('Test Email from Motor Pool System');
+        });
+        
+        $result = [
+            'status' => 'success',
+            'message' => 'Test email sent successfully!',
+            'config' => [
+                'mailer' => config('mail.default'),
+                'host' => config('mail.mailers.smtp.host'),
+                'port' => config('mail.mailers.smtp.port'),
+                'encryption' => config('mail.mailers.smtp.encryption'),
+                'username' => config('mail.mailers.smtp.username'),
+                'from_address' => config('mail.from.address'),
+                'from_name' => config('mail.from.name'),
+            ],
+            'sent_to' => $testEmail,
+        ];
+        
+        \Illuminate\Support\Facades\Log::info('Test email sent', $result);
+        
+        return response()->json($result);
+        
+    } catch (\Exception $e) {
+        $error = [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+        ];
+        
+        \Illuminate\Support\Facades\Log::error('Test email failed', $error);
+        
+        return response()->json($error, 500);
+    }
+})->middleware('auth');
