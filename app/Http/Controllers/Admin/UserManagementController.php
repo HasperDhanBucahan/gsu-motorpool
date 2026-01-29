@@ -4,30 +4,20 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Mail\AccountApprovedMail;
-use App\Mail\AdminAccountCreatedMail;
 use App\Mail\UserAccountCreatedMail;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 
 class UserManagementController extends Controller
 {
-    /**
-     * Display user management page
-     */
     public function index()
     {
-        // Get all approved users (no pending state anymore)
-        $users = User::where('status', User::STATUS_APPROVED)
-            ->with('approver')
-            ->orderBy('created_at', 'desc')
+        $users = User::with('approver')
+            ->latest()
             ->get()
             ->map(function ($user) {
                 return [
@@ -40,7 +30,7 @@ class UserManagementController extends Controller
                     'role_name' => $user->role_name,
                     'status' => $user->status,
                     'created_by' => $user->approver ? $user->approver->name : 'System',
-                    'created_at' => $user->created_at->format('M d, Y h:i A'),
+                    'created_at' => $user->created_at->format('M d, Y'),
                 ];
             });
 
@@ -49,29 +39,21 @@ class UserManagementController extends Controller
         ]);
     }
 
-    /**
-     * Create a new user account (client or admin)
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => 'required|email|unique:users,email',
             'department' => 'required|string|max:255',
             'position' => 'required|string|max:255',
-            'role' => ['required', Rule::in([
-                User::ROLE_CLIENT,
-                User::ROLE_ASSIGNMENT_ADMIN,
-                User::ROLE_TICKET_ADMIN
-            ])],
+            'role' => 'required|in:client,assignment_admin,ticket_admin',
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // Generate temporary password
+            // Generate a random temporary password
             $temporaryPassword = Str::random(12);
 
+            // Create the user
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -82,148 +64,124 @@ class UserManagementController extends Controller
                 'status' => User::STATUS_APPROVED,
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
+                'email_verified_at' => now(),
             ]);
 
-            // ENHANCED EMAIL SENDING WITH DETAILED LOGGING
-            try {
-                Log::info('Attempting to send account creation email', [
-                    'user_id' => $user->id,
-                    'user_email' => $user->email,
-                    'user_role' => $user->role,
-                    'mail_config' => [
-                        'mailer' => config('mail.default'),
-                        'host' => config('mail.mailers.smtp.host'),
-                        'port' => config('mail.mailers.smtp.port'),
-                        'from' => config('mail.from.address'),
-                    ]
-                ]);
-
-                if ($user->role === User::ROLE_CLIENT) {
-                    // Send client account email
-                    Mail::to($user->email)->send(new UserAccountCreatedMail($user, $temporaryPassword));
-                    Log::info('Client account email sent successfully', [
-                        'user_id' => $user->id,
-                        'email' => $user->email
-                    ]);
-                } else {
-                    // Send admin account email
-                    Mail::to($user->email)->send(new AdminAccountCreatedMail($user, $temporaryPassword));
-                    Log::info('Admin account email sent successfully', [
-                        'user_id' => $user->id,
-                        'email' => $user->email
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::error('Failed to send account creation email', [
-                    'user_id' => $user->id,
-                    'user_email' => $user->email,
-                    'error_message' => $e->getMessage(),
-                    'error_trace' => $e->getTraceAsString(),
-                    'error_file' => $e->getFile(),
-                    'error_line' => $e->getLine()
-                ]);
-
-                // Don't rollback the transaction - user is created but email failed
-                // Instead, notify the admin
-                DB::commit();
-                
-                $roleType = $user->role === User::ROLE_CLIENT ? 'Client' : 'Admin';
-                return redirect()->back()->with('warning', "{$roleType} account created successfully, but failed to send email. Please provide credentials manually. Email: {$user->email}, Password: {$temporaryPassword}");
-            }
-
-            DB::commit();
-
-            Log::info('User account created successfully', [
+            Log::info('User created successfully', [
                 'user_id' => $user->id,
-                'role' => $user->role,
-                'created_by' => auth()->id()
+                'email' => $user->email,
+                'name' => $user->name,
+                'environment' => config('app.env'),
             ]);
 
-            $roleType = $user->role === User::ROLE_CLIENT ? 'Client' : 'Admin';
-            return redirect()->back()->with('success', "{$roleType} account created successfully. Login credentials sent to email.");
+            // Send email with credentials using Resend
+            try {
+                Log::info('Attempting to send email via Resend', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'mailer' => config('mail.default'),
+                    'from_address' => config('mail.from.address'),
+                ]);
 
+                Mail::to($user->email)->send(new UserAccountCreatedMail($user, $temporaryPassword));
+
+                Log::info('Email sent successfully via Resend', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+
+                return back()->with('success', 'User account created successfully! Login credentials have been sent to ' . $user->email);
+                
+            } catch (\Exception $mailException) {
+                Log::error('Failed to send email via Resend', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'error' => $mailException->getMessage(),
+                    'trace' => $mailException->getTraceAsString(),
+                    'resend_key_exists' => !empty(config('services.resend.key')),
+                ]);
+
+                // User is created, but email failed - return the password in the warning
+                return back()->with('warning', 'User account created, but failed to send email. Please provide these credentials manually - Email: ' . $user->email . ' | Password: ' . $temporaryPassword);
+            }
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('User account creation failed', [
+            Log::error('Failed to create user', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            return back()->withErrors(['error' => 'Failed to create account: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Failed to create user account: ' . $e->getMessage()]);
         }
     }
 
-    /**
-     * Update user information
-     */
     public function update(Request $request, $id)
     {
         $user = User::findOrFail($id);
 
+        // Prevent editing approval admin role unless you are approval admin
+        if ($user->role === User::ROLE_APPROVAL_ADMIN && auth()->user()->role !== User::ROLE_APPROVAL_ADMIN) {
+            return back()->withErrors(['error' => 'You cannot edit approval admin accounts.']);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email' => 'required|email|unique:users,email,' . $id,
             'department' => 'required|string|max:255',
             'position' => 'required|string|max:255',
-            'role' => ['required', Rule::in([
-                User::ROLE_CLIENT,
-                User::ROLE_ASSIGNMENT_ADMIN,
-                User::ROLE_TICKET_ADMIN
-            ])],
+            'role' => 'required|in:client,assignment_admin,ticket_admin,approval_admin',
         ]);
+
+        // Prevent changing approval admin role
+        if ($user->role === User::ROLE_APPROVAL_ADMIN && $validated['role'] !== User::ROLE_APPROVAL_ADMIN) {
+            return back()->withErrors(['error' => 'You cannot change the role of an approval admin.']);
+        }
 
         try {
             $user->update($validated);
 
-            Log::info('User updated', [
+            Log::info('User updated successfully', [
                 'user_id' => $user->id,
-                'updated_by' => auth()->id()
+                'updated_by' => auth()->id(),
             ]);
 
-            return redirect()->back()->with('success', 'User updated successfully.');
-
+            return back()->with('success', 'User updated successfully!');
         } catch (\Exception $e) {
-            Log::error('User update failed', [
+            Log::error('Failed to update user', [
                 'user_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
         }
     }
 
-    /**
-     * Delete a user
-     */
     public function destroy($id)
     {
+        $user = User::findOrFail($id);
+
+        // Prevent deleting approval admin
+        if ($user->role === User::ROLE_APPROVAL_ADMIN) {
+            return back()->withErrors(['error' => 'Approval admin accounts cannot be deleted.']);
+        }
+
+        // Prevent deleting yourself
+        if ($user->id === auth()->id()) {
+            return back()->withErrors(['error' => 'You cannot delete your own account.']);
+        }
+
         try {
-            $user = User::findOrFail($id);
-
-            // Prevent deleting yourself
-            if ($user->id === auth()->id()) {
-                return back()->withErrors(['error' => 'You cannot delete your own account.']);
-            }
-
-            // Prevent deleting approval admin
-            if ($user->role === User::ROLE_APPROVAL_ADMIN) {
-                return back()->withErrors(['error' => 'Approval admin accounts cannot be deleted.']);
-            }
-
-            $userName = $user->name;
             $user->delete();
 
-            Log::info('User deleted', [
-                'user_name' => $userName,
-                'deleted_by' => auth()->id()
+            Log::info('User deleted successfully', [
+                'user_id' => $user->id,
+                'deleted_by' => auth()->id(),
             ]);
 
-            return redirect()->back()->with('success', 'User deleted successfully.');
-
+            return back()->with('success', 'User deleted successfully!');
         } catch (\Exception $e) {
-            Log::error('User deletion failed', [
+            Log::error('Failed to delete user', [
                 'user_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
