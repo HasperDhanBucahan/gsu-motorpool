@@ -4,12 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Mail\UserAccountCreatedMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class UserManagementController extends Controller
@@ -47,20 +44,18 @@ class UserManagementController extends Controller
             'department' => 'required|string|max:255',
             'position' => 'required|string|max:255',
             'role' => 'required|in:client,assignment_admin,ticket_admin',
+            'password' => 'required|string|min:8|confirmed', // Added password validation
         ]);
 
         try {
-            // Generate a random temporary password
-            $temporaryPassword = Str::random(12);
-
-            // Create the user
+            // Create the user with the provided password
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'department' => $validated['department'],
                 'position' => $validated['position'],
                 'role' => $validated['role'],
-                'password' => Hash::make($temporaryPassword),
+                'password' => Hash::make($validated['password']),
                 'status' => User::STATUS_APPROVED,
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
@@ -71,39 +66,11 @@ class UserManagementController extends Controller
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'name' => $user->name,
-                'environment' => config('app.env'),
+                'created_by' => auth()->id(),
             ]);
 
-            // Send email with credentials using Resend
-            try {
-                Log::info('Attempting to send email via Resend', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'mailer' => config('mail.default'),
-                    'from_address' => config('mail.from.address'),
-                ]);
-
-                Mail::to($user->email)->send(new UserAccountCreatedMail($user, $temporaryPassword));
-
-                Log::info('Email sent successfully via Resend', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                ]);
-
-                return back()->with('success', 'User account created successfully! Login credentials have been sent to ' . $user->email);
-                
-            } catch (\Exception $mailException) {
-                Log::error('Failed to send email via Resend', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'error' => $mailException->getMessage(),
-                    'trace' => $mailException->getTraceAsString(),
-                    'resend_key_exists' => !empty(config('services.resend.key')),
-                ]);
-
-                // User is created, but email failed - return the password in the warning
-                return back()->with('warning', 'User account created, but failed to send email. Please provide these credentials manually - Email: ' . $user->email . ' | Password: ' . $temporaryPassword);
-            }
+            return back()->with('success', 'User account created successfully!');
+            
         } catch (\Exception $e) {
             Log::error('Failed to create user', [
                 'error' => $e->getMessage(),
