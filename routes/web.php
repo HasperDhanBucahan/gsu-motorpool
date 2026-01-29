@@ -157,89 +157,115 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/calendar/requests/{id}', [CalendarController::class, 'show'])->name('calendar.requests.show');
 });
 
-Route::middleware(['auth'])->get('/debug-role', function () {
-    return response()->json([
-        'user' => auth()->user(),
-        'role' => auth()->user()->role,
-    ]);
-});
-
-// TEMPORARY EMAIL TEST - NO AUTH REQUIRED
-Route::get('/test-email-send-public-temp', function () {
-    try {
-        $testEmail = 'hasperthegreat04@gmail.com'; // Your email
+Route::get('/diagnose-email-config', function () {
+    $diagnostics = [
+        'timestamp' => now()->toDateTimeString(),
+        'environment' => config('app.env'),
         
-        \Illuminate\Support\Facades\Log::info('Starting email test');
-        
-        // Test 1: Check mail configuration
-        $config = [
-            'mailer' => config('mail.default'),
-            'host' => config('mail.mailers.smtp.host'),
-            'port' => config('mail.mailers.smtp.port'),
-            'encryption' => config('mail.mailers.smtp.encryption'),
-            'username' => config('mail.mailers.smtp.username'),
-            'password_set' => !empty(config('mail.mailers.smtp.password')),
+        // Mail Configuration
+        'mail_config' => [
+            'default_mailer' => config('mail.default'),
+            'resend_transport_configured' => config('mail.mailers.resend.transport') ?? 'NOT SET',
             'from_address' => config('mail.from.address'),
             'from_name' => config('mail.from.name'),
-        ];
+        ],
         
-        \Illuminate\Support\Facades\Log::info('Mail configuration', $config);
+        // Services Configuration
+        'services_config' => [
+            'resend_key_configured' => !empty(config('services.resend.key')),
+            'resend_key_preview' => config('services.resend.key') 
+                ? substr(config('services.resend.key'), 0, 10) . '...' . substr(config('services.resend.key'), -4)
+                : 'NOT SET',
+        ],
         
-        // Test 2: Send email
-        \Illuminate\Support\Facades\Mail::raw('Test email from Railway Motor Pool System - ' . now(), function ($message) use ($testEmail) {
-            $message->to($testEmail)
-                    ->subject('Test Email - Motor Pool System');
-        });
+        // Environment Variables
+        'env_vars' => [
+            'MAIL_MAILER' => env('MAIL_MAILER'),
+            'RESEND_KEY_set' => !empty(env('RESEND_KEY')),
+            'RESEND_KEY_preview' => env('RESEND_KEY') 
+                ? substr(env('RESEND_KEY'), 0, 10) . '...' . substr(env('RESEND_KEY'), -4)
+                : 'NOT SET',
+            'MAIL_FROM_ADDRESS' => env('MAIL_FROM_ADDRESS'),
+            'MAIL_FROM_NAME' => env('MAIL_FROM_NAME'),
+        ],
         
-        \Illuminate\Support\Facades\Log::info('Email sent successfully');
+        // Package Check
+        'packages' => [
+            'resend_package_installed' => class_exists(\Resend\Laravel\ResendServiceProvider::class),
+            'resend_version' => 'Check composer.json',
+        ],
         
-        return response()->json([
-            'status' => 'SUCCESS',
-            'message' => 'Test email sent! Check your inbox: ' . $testEmail,
-            'config' => $config,
-            'timestamp' => now()->toDateTimeString(),
-        ]);
+        // Config Files Exist
+        'config_files' => [
+            'mail_config_exists' => file_exists(config_path('mail.php')),
+            'services_config_exists' => file_exists(config_path('services.php')),
+        ],
         
-    } catch (\Exception $e) {
-        $error = [
-            'status' => 'ERROR',
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ];
-        
-        \Illuminate\Support\Facades\Log::error('Email test failed', $error);
-        
-        return response()->json($error, 500);
+        // Mail Mailable Check
+        'mail_classes' => [
+            'UserAccountCreatedMail_exists' => class_exists(\App\Mail\UserAccountCreatedMail::class),
+            'Mail_facade_works' => class_exists(\Illuminate\Support\Facades\Mail::class),
+        ],
+    ];
+    
+    // Determine issues
+    $issues = [];
+    $recommendations = [];
+    
+    if (config('mail.default') !== 'resend') {
+        $issues[] = "MAIL_MAILER is not set to 'resend' (current: " . config('mail.default') . ")";
+        $recommendations[] = "Set MAIL_MAILER=resend in Railway environment variables";
     }
+    
+    if (empty(config('services.resend.key'))) {
+        $issues[] = "Resend API key not configured in services.php";
+        $recommendations[] = "Add 'resend' => ['key' => env('RESEND_KEY')] to config/services.php";
+    }
+    
+    if (empty(env('RESEND_KEY'))) {
+        $issues[] = "RESEND_KEY environment variable not set";
+        $recommendations[] = "Set RESEND_KEY in Railway environment variables";
+    }
+    
+    $resendMailer = config('mail.mailers.resend');
+    if (empty($resendMailer)) {
+        $issues[] = "Resend mailer not configured in mail.php";
+        $recommendations[] = "Add 'resend' => ['transport' => 'resend'] to config/mail.php mailers array";
+    }
+    
+    $diagnostics['issues'] = $issues;
+    $diagnostics['recommendations'] = $recommendations;
+    $diagnostics['status'] = empty($issues) ? 'READY' : 'NEEDS_CONFIGURATION';
+    
+    return response()->json($diagnostics, 200, [], JSON_PRETTY_PRINT);
 });
 
-Route::get('/test-user-email-direct', function () {
+// BONUS: Test actual email sending
+Route::get('/diagnose-email-send', function () {
+    $testEmail = 'hasperthegreat04@gmail.com';
+    
     try {
-        $testUser = new \App\Models\User([
-            'name' => 'Test User',
-            'email' => 'hasperthegreat04@gmail.com',
-            'department' => 'IT Department',
-            'position' => 'Developer',
-            'role' => \App\Models\User::ROLE_CLIENT,
+        \Log::info('Email Send Test Started', [
+            'mailer' => config('mail.default'),
+            'to' => $testEmail,
         ]);
         
-        $testPassword = 'TestPassword123';
+        \Mail::raw('Diagnostic test email sent at ' . now()->format('Y-m-d H:i:s') . ' from Railway deployment.', function ($message) use ($testEmail) {
+            $message->to($testEmail)
+                    ->subject('Email Diagnostic Test - QSU Motorpool');
+        });
         
-        \Illuminate\Support\Facades\Log::info('Testing UserAccountCreatedMail');
-        
-        \Illuminate\Support\Facades\Mail::to('hasperthegreat04@gmail.com')
-            ->send(new \App\Mail\UserAccountCreatedMail($testUser, $testPassword));
-        
-        \Illuminate\Support\Facades\Log::info('UserAccountCreatedMail sent successfully');
+        \Log::info('Email Send Test - SUCCESS');
         
         return response()->json([
             'status' => 'SUCCESS',
-            'message' => 'UserAccountCreatedMail sent! Check your inbox.',
+            'message' => 'Email sent successfully to ' . $testEmail,
+            'mailer_used' => config('mail.default'),
+            'check_logs' => 'Review Railway logs for detailed information',
         ]);
         
     } catch (\Exception $e) {
-        \Illuminate\Support\Facades\Log::error('UserAccountCreatedMail test failed', [
+        \Log::error('Email Send Test - FAILED', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
         ]);
@@ -247,6 +273,7 @@ Route::get('/test-user-email-direct', function () {
         return response()->json([
             'status' => 'ERROR',
             'message' => $e->getMessage(),
+            'error_type' => get_class($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
         ], 500);
