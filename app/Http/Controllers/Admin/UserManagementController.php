@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Mail\AccountApprovedMail;
 use App\Mail\AdminAccountCreatedMail;
-use App\Mail\UserAccountCreatedMail; // NEW: For client accounts
+use App\Mail\UserAccountCreatedMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -79,30 +79,61 @@ class UserManagementController extends Controller
                 'position' => $validated['position'],
                 'role' => $validated['role'],
                 'password' => Hash::make($temporaryPassword),
-                'status' => User::STATUS_APPROVED, // Auto-approve all created accounts
+                'status' => User::STATUS_APPROVED,
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
             ]);
 
-            // Send email with credentials based on role
+            // ENHANCED EMAIL SENDING WITH DETAILED LOGGING
             try {
+                Log::info('Attempting to send account creation email', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'user_role' => $user->role,
+                    'mail_config' => [
+                        'mailer' => config('mail.default'),
+                        'host' => config('mail.mailers.smtp.host'),
+                        'port' => config('mail.mailers.smtp.port'),
+                        'from' => config('mail.from.address'),
+                    ]
+                ]);
+
                 if ($user->role === User::ROLE_CLIENT) {
                     // Send client account email
                     Mail::to($user->email)->send(new UserAccountCreatedMail($user, $temporaryPassword));
+                    Log::info('Client account email sent successfully', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
                 } else {
                     // Send admin account email
                     Mail::to($user->email)->send(new AdminAccountCreatedMail($user, $temporaryPassword));
+                    Log::info('Admin account email sent successfully', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to send account creation email', [
                     'user_id' => $user->id,
-                    'error' => $e->getMessage()
+                    'user_email' => $user->email,
+                    'error_message' => $e->getMessage(),
+                    'error_trace' => $e->getTraceAsString(),
+                    'error_file' => $e->getFile(),
+                    'error_line' => $e->getLine()
                 ]);
+
+                // Don't rollback the transaction - user is created but email failed
+                // Instead, notify the admin
+                DB::commit();
+                
+                $roleType = $user->role === User::ROLE_CLIENT ? 'Client' : 'Admin';
+                return redirect()->back()->with('warning', "{$roleType} account created successfully, but failed to send email. Please provide credentials manually. Email: {$user->email}, Password: {$temporaryPassword}");
             }
 
             DB::commit();
 
-            Log::info('User account created', [
+            Log::info('User account created successfully', [
                 'user_id' => $user->id,
                 'role' => $user->role,
                 'created_by' => auth()->id()
@@ -114,7 +145,8 @@ class UserManagementController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('User account creation failed', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return back()->withErrors(['error' => 'Failed to create account: ' . $e->getMessage()]);
@@ -197,9 +229,4 @@ class UserManagementController extends Controller
             return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
         }
     }
-
-    /**
-     * REMOVED: approve() method - no longer needed
-     * REMOVED: reject() method - no longer needed
-     */
 }
