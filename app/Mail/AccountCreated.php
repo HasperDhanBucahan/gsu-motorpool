@@ -8,21 +8,22 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Mail\Mailables\Address;
 
-class AccountApprovedMail extends Mailable
+class AccountCreated extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public User $user;
-    public string $loginUrl;
+    public $user;
+    public $temporaryPassword;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(User $user)
+    public function __construct(User $user, string $temporaryPassword)
     {
         $this->user = $user;
-        $this->loginUrl = route('login');
+        $this->temporaryPassword = $temporaryPassword;
     }
 
     /**
@@ -31,7 +32,11 @@ class AccountApprovedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Account Approved - Motor Pool Services Request System',
+            from: new Address(
+                config('mail.from.address'),
+                config('mail.from.name')
+            ),
+            subject: 'Welcome to QSU Motor Pool System - Account Created',
         );
     }
 
@@ -41,11 +46,10 @@ class AccountApprovedMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.account-approved',
+            markdown: 'emails.account-created',
             with: [
-                'userName' => $this->user->name,
-                'userEmail' => $this->user->email,
-                'loginUrl' => $this->loginUrl,
+                'user' => $this->user,
+                'temporaryPassword' => $this->temporaryPassword,
             ],
         );
     }

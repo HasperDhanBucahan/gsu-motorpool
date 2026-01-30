@@ -7,10 +7,12 @@ use Inertia\Response;
 use App\Models\Driver;
 use App\Models\Vehicle;
 use App\Models\Assignment;
+use App\Mail\RequestApproved;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\RedirectResponse;
 use App\Models\Request as VehicleRequest;
 use Illuminate\Http\Request as HttpRequest;
@@ -125,7 +127,7 @@ class ApprovalController extends Controller
         try {
             DB::beginTransaction();
 
-            $request = VehicleRequest::findOrFail($id);
+            $request = VehicleRequest::with(['user', 'vehicle', 'driver', 'approver'])->findOrFail($id);
 
             // Ensure request is in assigned status
             if ($request->status !== VehicleRequest::STATUS_ASSIGNED) {
@@ -151,18 +153,52 @@ class ApprovalController extends Controller
                 ]);
             }
 
+            // Generate PDF for email attachment
+            $pdf = $this->generateApprovalPdf(
+                $request, 
+                $request->vehicle, 
+                $request->driver, 
+                'approve', 
+                '', 
+                auth()->user()
+            );
+            $pdfContent = $pdf->Output('S'); // Get PDF as string
+
             DB::commit();
 
             $notificationService = app(NotificationService::class);
 
-            // This will now send both in-app notification AND email
+            // Send in-app notification
             $notificationService->notifyClient($request, 'approved');
 
             // Notify ticket admin
             $notificationService->notifyTicketAdmin($request);
 
+            // Send email with PDF attachment
+            try {
+                // Reload the request with fresh relationships for the email
+                $request->load(['user', 'vehicle', 'driver', 'approver']);
+                
+                Mail::to($request->user->email)->send(new RequestApproved($request, $pdfContent));
+                
+                Log::info('Approval email sent successfully', [
+                    'request_id' => $request->id,
+                    'user_email' => $request->user->email,
+                ]);
+
+                $successMessage = 'Request approved successfully. Email notification sent to ' . $request->user->email;
+            } catch (\Exception $e) {
+                Log::warning('Failed to send approval email', [
+                    'request_id' => $request->id,
+                    'user_email' => $request->user->email,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $successMessage = 'Request approved successfully. ⚠️ Email notification failed to send.';
+            }
+
             return redirect()->route('admin.requests.management')
-                ->with('success', 'Request approved successfully.');
+                ->with('success', $successMessage);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Request approval failed: ' . $e->getMessage(), [
