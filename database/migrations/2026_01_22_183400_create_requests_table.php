@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('destination');
             $table->text('authorized_passengers')->nullable();
-            $table->integer('days_of_travel');
+            $table->float('days_of_travel');
             $table->enum('half_day_period', ['morning', 'afternoon', 'full']);
             $table->text('purpose');
             $table->date('date_of_travel');
