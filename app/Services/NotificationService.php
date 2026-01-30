@@ -143,7 +143,7 @@ class NotificationService
         try {
             if ($action === 'approved') {
                 // Generate PDF download link (signed URL for security)
-                $pdfDownloadUrl = route('requests.download-pdf', ['id' => $request->id]);
+                $pdfDownloadUrl = route('client.requests.pdf', ['id' => $request->id]);
                 
                 Notification::create([
                     'user_id' => $request->user_id,
@@ -165,7 +165,7 @@ class NotificationService
 
                 // Send approval email with PDF download link
                 try {
-                    Mail::to($request->user->email)->send(new \App\Mail\RequestApprovedMail($request, $pdfDownloadUrl));
+                    Mail::to($request->user->email)->send(new \App\Mail\RequestApproved($request, $pdfDownloadUrl));
                     
                     Log::info('Approval email sent to client', [
                         'request_id' => $request->id,
